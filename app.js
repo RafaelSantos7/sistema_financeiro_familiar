@@ -1,8 +1,3 @@
-// ==========================================
-// FINANÇAS FAMILIAR - APP.JS (VERSÃO CORRIGIDA)
-// ==========================================
-
-// ==========================================
 // CONFIGURAÇÃO E ESTADO GLOBAL
 // ==========================================
 
@@ -19,7 +14,6 @@ let formSubmitLock = false;
 
 // ==========================================
 // INICIALIZAÇÃO PRINCIPAL
-// ==========================================
 
 document.addEventListener("DOMContentLoaded", function () {
   console.log("=== DOM CARREGADO ===");
@@ -46,7 +40,6 @@ document.addEventListener("DOMContentLoaded", function () {
 
 // ==========================================
 // PÁGINA DE LOGIN (index.html)
-// ==========================================
 
 function initLoginPage() {
   console.log("Inicializando login...");
@@ -215,7 +208,6 @@ function initializeUserData(userId) {
 
 // ==========================================
 // RECUPERAÇÃO DE SENHA
-// ==========================================
 
 function showForgotPasswordForm() {
   const container = document.querySelector(".auth-card");
@@ -389,7 +381,6 @@ function showPasswordResetForm(token) {
 
 // ==========================================
 // PÁGINA DO APP (financas.html)
-// ==========================================
 
 function initAppPage() {
   console.log("=== INICIANDO APP ===");
@@ -473,7 +464,6 @@ function loadAllData() {
 
 // ==========================================
 // NAVEGAÇÃO
-// ==========================================
 
 function showSection(sectionId) {
   console.log("Mostrando seção:", sectionId);
@@ -785,7 +775,6 @@ function deleteFamilyMember(id) {
 
 // ==========================================
 // DÍVIDAS
-// ==========================================
 
 function addDebt(e) {
   e.preventDefault();
@@ -927,7 +916,6 @@ function deleteDebt(id) {
 
 // ==========================================
 // RECEBIMENTOS (RENDA EXTRA)
-// ==========================================
 
 function addIncome(e) {
   e.preventDefault();
@@ -1053,7 +1041,6 @@ function deleteIncome(id) {
 
 // ==========================================
 // CONTAS
-// ==========================================
 
 function addBill(e) {
   e.preventDefault();
@@ -1212,8 +1199,7 @@ function deleteBill(id) {
 }
 
 // ==========================================
-// DASHBOARD (CORRIGIDO)
-// ==========================================
+// DASHBOARD
 
 function updateDashboard() {
   const monthData = getMonthData();
@@ -1411,7 +1397,6 @@ function updateMainChart(income, bills, debts, balance) {
 
 // ==========================================
 // RELATÓRIOS
-// ==========================================
 
 function updateReports() {
   const monthData = getMonthData();
@@ -1583,8 +1568,7 @@ function updateReports() {
 }
 
 // ==========================================
-// HISTÓRICO E EVOLUÇÃO FINANCEIRA (CORRIGIDO)
-// ==========================================
+// HISTÓRICO E EVOLUÇÃO FINANCEIRA
 
 function loadFinancialEvolution() {
   const userData = getUserData();
@@ -1690,7 +1674,7 @@ function loadFinancialEvolution() {
         <td style="color: var(--accent-emerald);">${formatCurrency(extraIncome)}</td>
         <td style="color: var(--accent-blue);">${formatCurrency(totalBills)}</td>
         <td style="color: var(--accent-rose);">${formatCurrency(totalDebts)}</td>
-        <td style="color: ${balance >= 0 ? 'var(--accent-emerald)' : 'var(--accent-rose)'}; font-weight: 600;">${formatCurrency(balance)}</td>
+        <td style="color: ${balance >= 0 ? "var(--accent-emerald)" : "var(--accent-rose)"}; font-weight: 600;">${formatCurrency(balance)}</td>
       </tr>
     `;
   });
@@ -1768,7 +1752,9 @@ function loadFinancialEvolution() {
           tooltip: {
             callbacks: {
               label: function (context) {
-                return context.dataset.label + ": " + formatCurrency(context.raw);
+                return (
+                  context.dataset.label + ": " + formatCurrency(context.raw)
+                );
               },
             },
           },
@@ -1859,30 +1845,46 @@ function loadHistory() {
       <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem;">
         <div class="card">
           <h4>📄 Contas</h4>
-          ${(monthData.bills || []).length === 0 ? '<p style="color: var(--text-muted);">Nenhuma conta</p>' : `
+          ${
+            (monthData.bills || []).length === 0
+              ? '<p style="color: var(--text-muted);">Nenhuma conta</p>'
+              : `
             <ul style="list-style: none; padding: 0;">
-              ${(monthData.bills || []).map(b => `
+              ${(monthData.bills || [])
+                .map(
+                  (b) => `
                 <li style="display: flex; justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px solid var(--border-color);">
                   <span>${escapeHtml(b.description)}</span>
-                  <span style="color: ${b.status === 'Pago' ? 'var(--accent-emerald)' : 'var(--accent-rose)'}">${formatCurrency(b.amount)}</span>
+                  <span style="color: ${b.status === "Pago" ? "var(--accent-emerald)" : "var(--accent-rose)"}">${formatCurrency(b.amount)}</span>
                 </li>
-              `).join('')}
+              `,
+                )
+                .join("")}
             </ul>
-          `}
+          `
+          }
         </div>
         
         <div class="card">
           <h4>💰 Recebimentos</h4>
-          ${(monthData.incomes || []).length === 0 ? '<p style="color: var(--text-muted);">Nenhum recebimento</p>' : `
+          ${
+            (monthData.incomes || []).length === 0
+              ? '<p style="color: var(--text-muted);">Nenhum recebimento</p>'
+              : `
             <ul style="list-style: none; padding: 0;">
-              ${(monthData.incomes || []).map(i => `
+              ${(monthData.incomes || [])
+                .map(
+                  (i) => `
                 <li style="display: flex; justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px solid var(--border-color);">
                   <span>${escapeHtml(i.description)}</span>
                   <span style="color: var(--accent-emerald)">${formatCurrency(i.amount)}</span>
                 </li>
-              `).join('')}
+              `,
+                )
+                .join("")}
             </ul>
-          `}
+          `
+          }
         </div>
       </div>
     `;
@@ -1891,7 +1893,6 @@ function loadHistory() {
 
 // ==========================================
 // CONFIGURAÇÕES
-// ==========================================
 
 function clearCurrentMonth() {
   if (!confirm("Apagar todos os dados do mês atual?")) return;
@@ -1972,7 +1973,6 @@ function generateFullReport() {
 
 // ==========================================
 // UTILITÁRIOS
-// ==========================================
 
 function formatCurrency(value) {
   return new Intl.NumberFormat("pt-BR", {
@@ -2052,7 +2052,6 @@ function showNotification(message, type = "info") {
 
 // ==========================================
 // FUNÇÕES GLOBAIS
-// ==========================================
 
 window.showSection = showSection;
 window.changeMonth = changeMonth;
