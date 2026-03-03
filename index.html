@@ -1,0 +1,347 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Finanças Familiar - Login</title>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="style.css" />
+    <style>
+      :root {
+        --bg-primary: #0f172a;
+        --bg-secondary: #1e293b;
+        --bg-card: #334155;
+        --accent-gold: #f59e0b;
+        --accent-emerald: #10b981;
+        --accent-rose: #f43f5e;
+        --accent-blue: #3b82f6;
+        --text-primary: #f8fafc;
+        --text-secondary: #cbd5e1;
+        --text-muted: #64748b;
+        --border: #475569;
+      }
+
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: "Inter", sans-serif;
+        background: var(--bg-primary);
+        color: var(--text-primary);
+        min-height: 100vh;
+      }
+
+      .auth-container {
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 1rem;
+      }
+
+      .auth-card {
+        background: var(--bg-secondary);
+        border: 1px solid var(--border);
+        border-radius: 24px;
+        padding: 2.5rem;
+        width: 100%;
+        max-width: 420px;
+        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+      }
+
+      .auth-logo {
+        text-align: center;
+        margin-bottom: 2rem;
+      }
+
+      .logo-icon-large {
+        width: 80px;
+        height: 80px;
+        background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+        border-radius: 24px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 2.5rem;
+        margin: 0 auto 1.5rem;
+        box-shadow: 0 10px 30px -10px rgba(245, 158, 11, 0.5);
+      }
+
+      .auth-logo h1 {
+        font-size: 1.75rem;
+        margin-bottom: 0.5rem;
+        background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+      }
+
+      .auth-logo p {
+        color: var(--text-muted);
+        font-size: 0.95rem;
+      }
+
+      .auth-tabs {
+        display: flex;
+        gap: 0.5rem;
+        margin-bottom: 1.5rem;
+        background: var(--bg-primary);
+        padding: 0.25rem;
+        border-radius: 12px;
+      }
+
+      .auth-tab {
+        flex: 1;
+        padding: 0.75rem;
+        border: none;
+        background: transparent;
+        color: var(--text-secondary);
+        font-family: inherit;
+        font-weight: 600;
+        cursor: pointer;
+        border-radius: 8px;
+        transition: all 0.3s ease;
+        font-size: 0.95rem;
+      }
+
+      .auth-tab.active {
+        background: var(--bg-card);
+        color: var(--text-primary);
+      }
+
+      .auth-form {
+        display: none;
+      }
+
+      .auth-form.active {
+        display: block;
+      }
+
+      .form-group {
+        margin-bottom: 1.25rem;
+      }
+
+      .form-group label {
+        display: block;
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: var(--text-secondary);
+        margin-bottom: 0.5rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+
+      .form-group input,
+      .form-group select {
+        width: 100%;
+        background: var(--bg-primary);
+        border: 2px solid var(--border);
+        border-radius: 12px;
+        padding: 1rem 1.25rem;
+        color: var(--text-primary);
+        font-family: inherit;
+        font-size: 1rem;
+        transition: all 0.3s ease;
+      }
+
+      .form-group input:focus,
+      .form-group select:focus {
+        outline: none;
+        border-color: var(--accent-gold);
+        box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.1);
+      }
+
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+        padding: 1rem 2rem;
+        border: none;
+        border-radius: 12px;
+        font-family: inherit;
+        font-size: 1rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+      }
+
+      .btn-primary {
+        background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+        color: white;
+        box-shadow: 0 10px 30px -10px rgba(245, 158, 11, 0.5);
+      }
+
+      .btn-primary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 20px 40px -10px rgba(245, 158, 11, 0.6);
+      }
+
+      .btn-secondary {
+        background: var(--bg-card);
+        color: var(--text-primary);
+        border: 1px solid var(--border);
+      }
+
+      .btn-full {
+        width: 100%;
+      }
+
+      .auth-switch {
+        text-align: center;
+        margin-top: 1.5rem;
+        color: var(--text-muted);
+        font-size: 0.9rem;
+      }
+
+      .auth-switch a {
+        color: var(--accent-gold);
+        text-decoration: none;
+        font-weight: 600;
+        cursor: pointer;
+      }
+
+      .auth-switch a:hover {
+        text-decoration: underline;
+      }
+
+      .forgot-password {
+        text-align: right;
+        margin-top: -0.5rem;
+        margin-bottom: 1rem;
+      }
+
+      .forgot-password a {
+        color: var(--text-muted);
+        font-size: 0.85rem;
+        text-decoration: none;
+        cursor: pointer;
+      }
+
+      .forgot-password a:hover {
+        color: var(--accent-gold);
+      }
+
+      @media (max-width: 480px) {
+        .auth-card {
+          padding: 1.5rem;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="auth-container">
+      <div class="auth-card">
+        <div class="auth-logo">
+          <div class="logo-icon-large">💰</div>
+          <h1>Finanças Familiar</h1>
+          <p>Gerencie suas finanças de forma simples e inteligente</p>
+        </div>
+
+        <div class="auth-tabs">
+          <button class="auth-tab active" data-tab="login">Login</button>
+          <button class="auth-tab" data-tab="register">Cadastro</button>
+        </div>
+
+        <!-- Login Form -->
+        <form id="loginForm" class="auth-form active">
+          <div class="form-group">
+            <label>Email</label>
+            <input
+              type="email"
+              id="loginEmail"
+              placeholder="seu@email.com"
+              required
+            />
+          </div>
+          <div class="form-group">
+            <label>Senha</label>
+            <input
+              type="password"
+              id="loginPassword"
+              placeholder="••••••••"
+              required
+            />
+          </div>
+          <div class="forgot-password">
+            <a href="#" id="forgotPasswordLink">Esqueceu a senha?</a>
+          </div>
+          <button type="submit" class="btn btn-primary btn-full">Entrar</button>
+          <p class="auth-switch">
+            Não tem conta?
+            <a
+              href="#"
+              onclick="
+                switchAuthTab('register');
+                return false;
+              "
+              >Cadastre-se</a
+            >
+          </p>
+        </form>
+
+        <!-- Register Form -->
+        <form id="registerForm" class="auth-form">
+          <div class="form-group">
+            <label>Nome completo</label>
+            <input
+              type="text"
+              id="registerName"
+              placeholder="Seu nome"
+              required
+            />
+          </div>
+          <div class="form-group">
+            <label>Email</label>
+            <input
+              type="email"
+              id="registerEmail"
+              placeholder="seu@email.com"
+              required
+            />
+          </div>
+          <div class="form-group">
+            <label>Senha</label>
+            <input
+              type="password"
+              id="registerPassword"
+              placeholder="Mínimo 6 caracteres"
+              minlength="6"
+              required
+            />
+          </div>
+          <div class="form-group">
+            <label>Confirmar senha</label>
+            <input
+              type="password"
+              id="registerConfirmPassword"
+              placeholder="••••••••"
+              required
+            />
+          </div>
+          <button type="submit" class="btn btn-primary btn-full">
+            Criar Conta
+          </button>
+          <p class="auth-switch">
+            Já tem conta?
+            <a
+              href="#"
+              onclick="
+                switchAuthTab('login');
+                return false;
+              "
+              >Faça login</a
+            >
+          </p>
+        </form>
+      </div>
+    </div>
+
+    <script src="app.js"></script>
+  </body>
+</html>

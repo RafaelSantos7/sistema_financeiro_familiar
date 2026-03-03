@@ -1,0 +1,786 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Finanças Familiar - Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <!-- Mobile Header -->
+    <header class="mobile-header">
+      <div class="mobile-logo">
+        <span class="logo-icon-small">💰</span>
+        <span class="logo-text-short">Finanças Familiar</span>
+      </div>
+      <button class="menu-toggle" onclick="toggleMobileMenu()">☰</button>
+    </header>
+
+    <div class="app-container">
+      <!-- Sidebar Navigation -->
+      <aside class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+          <div class="logo">
+            <div class="logo-icon">💰</div>
+            <div class="logo-text">
+              <h1>Finanças Familiar</h1>
+              <span>Controle Financeiro</span>
+            </div>
+          </div>
+          <button class="close-menu" onclick="toggleMobileMenu()">✕</button>
+        </div>
+
+        <div class="user-info">
+          <div class="user-avatar" id="userAvatar">👤</div>
+          <div class="user-details">
+            <span class="user-name" id="userName">Usuário</span>
+            <span class="user-email" id="userEmail">email@exemplo.com</span>
+          </div>
+        </div>
+
+        <nav class="nav-section">
+          <div class="nav-title">Menu Principal</div>
+          <div class="nav-item active" onclick="showSection('dashboard')">
+            <span class="nav-icon">📊</span>
+            <span>Dashboard</span>
+          </div>
+          <div class="nav-item" onclick="showSection('rendas')">
+            <span class="nav-icon">💵</span>
+            <span>Rendas Familiares</span>
+          </div>
+          <div class="nav-item" onclick="showSection('dividas')">
+            <span class="nav-icon">💳</span>
+            <span>Dívidas</span>
+          </div>
+          <div class="nav-item" onclick="showSection('recebimentos')">
+            <span class="nav-icon">💰</span>
+            <span>Recebimentos</span>
+          </div>
+          <div class="nav-item" onclick="showSection('contas')">
+            <span class="nav-icon">📄</span>
+            <span>Contas a Pagar</span>
+          </div>
+        </nav>
+
+        <nav class="nav-section">
+          <div class="nav-title">Análises</div>
+          <div class="nav-item" onclick="showSection('relatorios')">
+            <span class="nav-icon">📈</span>
+            <span>Relatórios</span>
+          </div>
+          <div class="nav-item" onclick="showSection('historico')">
+            <span class="nav-icon">📚</span>
+            <span>Histórico</span>
+          </div>
+        </nav>
+
+        <div class="nav-section danger-zone">
+          <div class="nav-title">Gerenciamento</div>
+          <div class="nav-item" onclick="showSection('configuracoes')">
+            <span class="nav-icon">⚙️</span>
+            <span>Configurações</span>
+          </div>
+          <div class="nav-item logout" onclick="logout()">
+            <span class="nav-icon">🚪</span>
+            <span>Sair</span>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Overlay for mobile -->
+      <div class="sidebar-overlay" onclick="toggleMobileMenu()"></div>
+
+      <!-- Main Content -->
+      <main class="main-content">
+        <div class="header">
+          <div class="header-left">
+            <h2 id="pageTitle">Dashboard</h2>
+            <p id="pageSubtitle">Visão geral da sua saúde financeira</p>
+          </div>
+          <div class="header-right">
+            <div class="month-selector">
+              <span class="calendar-icon">📅</span>
+              <input type="month" id="currentMonth" onchange="changeMonth()" />
+            </div>
+          </div>
+        </div>
+
+        <!-- Dashboard Section -->
+        <section id="dashboard" class="content-section active">
+          <div class="metrics-grid">
+            <div class="metric-card income">
+              <div class="metric-header">
+                <div class="metric-icon">💵</div>
+                <span class="metric-trend trend-up" id="incomeTrend">+0%</span>
+              </div>
+              <div class="metric-value" id="totalIncome">R$ 0,00</div>
+              <div class="metric-label">Renda Total do Mês</div>
+            </div>
+            <div class="metric-card debt">
+              <div class="metric-header">
+                <div class="metric-icon">💳</div>
+                <span class="metric-trend trend-down" id="debtTrend">-0%</span>
+              </div>
+              <div class="metric-value" id="totalDebts">R$ 0,00</div>
+              <div class="metric-label">Total de Dívidas</div>
+            </div>
+            <div class="metric-card expense">
+              <div class="metric-header">
+                <div class="metric-icon">📄</div>
+                <span class="metric-trend trend-up" id="expenseTrend">+0%</span>
+              </div>
+              <div class="metric-value" id="totalBills">R$ 0,00</div>
+              <div class="metric-label">Contas do Mês</div>
+            </div>
+            <div class="metric-card balance">
+              <div class="metric-header">
+                <div class="metric-icon">💎</div>
+                <span class="metric-trend trend-up" id="balanceTrend">+0%</span>
+              </div>
+              <div class="metric-value" id="availableBalance">R$ 0,00</div>
+              <div class="metric-label">Saldo Disponível</div>
+            </div>
+          </div>
+
+          <div class="charts-grid">
+            <div class="chart-card">
+              <div class="chart-header">
+                <h3>Distribuição Financeira</h3>
+                <p>Composição da sua renda e gastos</p>
+              </div>
+              <div class="chart-container">
+                <canvas id="mainChart"></canvas>
+              </div>
+            </div>
+            <div class="chart-card">
+              <div class="chart-header">
+                <h3>Alertas e Vencimentos</h3>
+                <p>Contas que precisam de atenção</p>
+              </div>
+              <div class="alerts-container" id="alertsContainer">
+                <div class="empty-state">
+                  <div class="empty-state-icon">✅</div>
+                  <h3>Tudo em ordem!</h3>
+                  <p>Nenhum alerta no momento</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Rendas Section (Substitui Salários) -->
+        <section id="rendas" class="content-section">
+          <div class="form-card">
+            <div class="form-header">
+              <span class="header-icon">👥</span>
+              <div>
+                <h3>Gerenciar Membros da Família</h3>
+                <p class="form-subtitle">
+                  Cadastre todos que contribuem com a renda familiar
+                </p>
+              </div>
+            </div>
+
+            <form id="memberForm" onsubmit="addFamilyMember(event)">
+              <div class="form-grid">
+                <div class="form-group">
+                  <label>Nome da Pessoa *</label>
+                  <input
+                    type="text"
+                    id="memberName"
+                    placeholder="Ex: João, Maria, Filho, etc."
+                    required
+                  />
+                </div>
+                <div class="form-group">
+                  <label>Salário/Renda Mensal (R$) *</label>
+                  <input
+                    type="number"
+                    id="memberSalary"
+                    step="0.01"
+                    min="0"
+                    placeholder="0,00"
+                    required
+                  />
+                </div>
+                <div class="form-group">
+                  <label>Tipo de Renda</label>
+                  <select id="memberType">
+                    <option value="salario">Salário Fixo</option>
+                    <option value="freelance">Freelance/Autônomo</option>
+                    <option value="aposentadoria">Aposentadoria</option>
+                    <option value="aluguel">Aluguel</option>
+                    <option value="outro">Outro</option>
+                  </select>
+                </div>
+              </div>
+              <div class="form-actions">
+                <button type="submit" class="btn btn-primary">
+                  <span>➕</span> Adicionar Membro
+                </button>
+              </div>
+            </form>
+          </div>
+
+          <div class="table-container">
+            <div class="table-header">
+              <h3>👨‍👩‍👧‍👦 Membros da Família</h3>
+              <span class="record-count" id="memberCount">0 membros</span>
+            </div>
+            <div class="table-responsive">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Nome</th>
+                    <th>Tipo</th>
+                    <th>Renda Mensal</th>
+                    <th>Ações</th>
+                  </tr>
+                </thead>
+                <tbody id="membersTableBody">
+                  <tr class="empty-row">
+                    <td colspan="4">
+                      <div class="empty-state small">
+                        <div class="empty-state-icon">👤</div>
+                        <h4>Nenhum membro cadastrado</h4>
+                        <p>Adicione os membros da sua família acima</p>
+                      </div>
+                    </td>
+                  </tr>
+                </tbody>
+                <tfoot>
+                  <tr class="total-row">
+                    <td colspan="2"><strong>Renda Total Familiar:</strong></td>
+                    <td colspan="2" id="familyTotalIncome">R$ 0,00</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- Dívidas Section -->
+        <section id="dividas" class="content-section">
+          <div class="form-card">
+            <div class="form-header">
+              <span class="header-icon">💳</span>
+              <h3>Cadastrar Nova Dívida</h3>
+            </div>
+            <form id="debtForm" onsubmit="addDebt(event)">
+              <div class="form-grid">
+                <div class="form-group">
+                  <label>Descrição *</label>
+                  <input
+                    type="text"
+                    id="debtDescription"
+                    placeholder="Ex: Financiamento carro"
+                    required
+                  />
+                </div>
+                <div class="form-group">
+                  <label>Credor *</label>
+                  <input
+                    type="text"
+                    id="debtCreditor"
+                    placeholder="Ex: Banco XYZ"
+                    required
+                  />
+                </div>
+                <div class="form-group">
+                  <label>Valor Total (R$) *</label>
+                  <input
+                    type="number"
+                    id="debtTotal"
+                    step="0.01"
+                    min="0"
+                    placeholder="0,00"
+                    required
+                  />
+                </div>
+                <div class="form-group">
+                  <label>Valor da Parcela (R$) *</label>
+                  <input
+                    type="number"
+                    id="debtInstallment"
+                    step="0.01"
+                    min="0"
+                    placeholder="0,00"
+                    required
+                  />
+                </div>
+                <div class="form-group">
+                  <label>Total de Parcelas *</label>
+                  <input
+                    type="number"
+                    id="debtInstallments"
+                    min="1"
+                    placeholder="Ex: 24"
+                    required
+                  />
+                </div>
+                <div class="form-group">
+                  <label>Parcelas Pagas</label>
+                  <input
+                    type="number"
+                    id="debtPaid"
+                    min="0"
+                    value="0"
+                    placeholder="0"
+                  />
+                </div>
+                <div class="form-group">
+                  <label>Dia do Vencimento *</label>
+                  <input
+                    type="number"
+                    id="debtDueDay"
+                    min="1"
+                    max="31"
+                    placeholder="Ex: 10"
+                    required
+                  />
+                </div>
+                <div class="form-group">
+                  <label>Juros (% a.m.)</label>
+                  <input
+                    type="number"
+                    id="debtInterest"
+                    step="0.01"
+                    min="0"
+                    value="0"
+                    placeholder="0,00"
+                  />
+                </div>
+              </div>
+              <div class="form-actions">
+                <button type="submit" class="btn btn-primary">
+                  <span>➕</span> Adicionar Dívida
+                </button>
+              </div>
+            </form>
+          </div>
+
+          <div class="table-container">
+            <div class="table-header">
+              <h3>📋 Dívidas Cadastradas</h3>
+              <span class="record-count" id="debtCount">0 registros</span>
+            </div>
+            <div class="table-responsive">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Descrição</th>
+                    <th>Credor</th>
+                    <th>Valor Total</th>
+                    <th>Parcela</th>
+                    <th>Progresso</th>
+                    <th>Vencimento</th>
+                    <th>Saldo Devedor</th>
+                    <th>Ações</th>
+                  </tr>
+                </thead>
+                <tbody id="debtTableBody">
+                  <tr class="empty-row">
+                    <td colspan="8">
+                      <div class="empty-state small">
+                        <div class="empty-state-icon">💳</div>
+                        <h4>Nenhuma dívida cadastrada</h4>
+                      </div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- Recebimentos Section -->
+        <section id="recebimentos" class="content-section">
+          <div class="form-card">
+            <div class="form-header">
+              <span class="header-icon">💰</span>
+              <h3>Cadastrar Recebimento Extra</h3>
+            </div>
+            <form id="incomeForm" onsubmit="addIncome(event)">
+              <div class="form-grid">
+                <div class="form-group">
+                  <label>Descrição *</label>
+                  <input
+                    type="text"
+                    id="incomeDescription"
+                    placeholder="Ex: Freelance, 13º, Bônus"
+                    required
+                  />
+                </div>
+                <div class="form-group">
+                  <label>Categoria *</label>
+                  <select id="incomeCategory" required>
+                    <option value="">Selecione...</option>
+                    <option value="Extra">Renda Extra</option>
+                    <option value="Investimento">Retorno Investimento</option>
+                    <option value="Presente">Presente/Herança</option>
+                    <option value="Reembolso">Reembolso</option>
+                    <option value="Outro">Outro</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>Valor (R$) *</label>
+                  <input
+                    type="number"
+                    id="incomeAmount"
+                    step="0.01"
+                    min="0"
+                    placeholder="0,00"
+                    required
+                  />
+                </div>
+                <div class="form-group">
+                  <label>Data *</label>
+                  <input type="date" id="incomeDate" required />
+                </div>
+                <div class="form-group">
+                  <label>Recorrente?</label>
+                  <select id="incomeRecurring">
+                    <option value="false">Não</option>
+                    <option value="true">Sim</option>
+                  </select>
+                </div>
+              </div>
+              <div class="form-actions">
+                <button type="submit" class="btn btn-primary">
+                  <span>➕</span> Adicionar Recebimento
+                </button>
+              </div>
+            </form>
+          </div>
+
+          <div class="table-container">
+            <div class="table-header">
+              <h3>📋 Recebimentos do Mês</h3>
+              <span class="record-count" id="incomeCount">0 registros</span>
+            </div>
+            <div class="table-responsive">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Descrição</th>
+                    <th>Categoria</th>
+                    <th>Valor</th>
+                    <th>Data</th>
+                    <th>Recorrente</th>
+                    <th>Ações</th>
+                  </tr>
+                </thead>
+                <tbody id="incomeTableBody">
+                  <tr class="empty-row">
+                    <td colspan="6">
+                      <div class="empty-state small">
+                        <div class="empty-state-icon">💰</div>
+                        <h4>Nenhum recebimento cadastrado</h4>
+                      </div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- Contas Section -->
+        <section id="contas" class="content-section">
+          <div class="form-card">
+            <div class="form-header">
+              <span class="header-icon">📄</span>
+              <h3>Cadastrar Conta a Pagar</h3>
+            </div>
+            <form id="billForm" onsubmit="addBill(event)">
+              <div class="form-grid">
+                <div class="form-group">
+                  <label>Descrição *</label>
+                  <input
+                    type="text"
+                    id="billDescription"
+                    placeholder="Ex: Conta de luz"
+                    required
+                  />
+                </div>
+                <div class="form-group">
+                  <label>Categoria *</label>
+                  <select id="billCategory" required>
+                    <option value="">Selecione...</option>
+                    <option value="Moradia">Moradia</option>
+                    <option value="Utilidades">
+                      Utilidades (Luz, Água, Gás)
+                    </option>
+                    <option value="Internet">Internet/TV/Streaming</option>
+                    <option value="Alimentação">Alimentação</option>
+                    <option value="Transporte">Transporte/Combustível</option>
+                    <option value="Saúde">Saúde/Medicamentos</option>
+                    <option value="Educação">Educação</option>
+                    <option value="Lazer">Lazer/Entretenimento</option>
+                    <option value="Vestuário">Vestuário</option>
+                    <option value="Outros">Outros</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>Valor (R$) *</label>
+                  <input
+                    type="number"
+                    id="billAmount"
+                    step="0.01"
+                    min="0"
+                    placeholder="0,00"
+                    required
+                  />
+                </div>
+                <div class="form-group">
+                  <label>Data de Vencimento *</label>
+                  <input type="date" id="billDueDate" required />
+                </div>
+                <div class="form-group">
+                  <label>Status</label>
+                  <select id="billStatus">
+                    <option value="Pendente">Pendente</option>
+                    <option value="Pago">Pago</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>Recorrente?</label>
+                  <select id="billRecurring">
+                    <option value="false">Não</option>
+                    <option value="true">Sim</option>
+                  </select>
+                </div>
+              </div>
+              <div class="form-actions">
+                <button type="submit" class="btn btn-primary">
+                  <span>➕</span> Adicionar Conta
+                </button>
+              </div>
+            </form>
+          </div>
+
+          <div class="table-container">
+            <div class="table-header">
+              <h3>📋 Contas do Mês</h3>
+              <span class="record-count" id="billCount">0 registros</span>
+            </div>
+            <div class="table-responsive">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Descrição</th>
+                    <th>Categoria</th>
+                    <th>Valor</th>
+                    <th>Vencimento</th>
+                    <th>Status</th>
+                    <th>Dias</th>
+                    <th>Ações</th>
+                  </tr>
+                </thead>
+                <tbody id="billTableBody">
+                  <tr class="empty-row">
+                    <td colspan="7">
+                      <div class="empty-state small">
+                        <div class="empty-state-icon">📄</div>
+                        <h4>Nenhuma conta cadastrada</h4>
+                      </div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- Relatórios Section -->
+        <section id="relatorios" class="content-section">
+          <div class="charts-grid">
+            <div class="chart-card">
+              <div class="chart-header">
+                <h3>Análise de Receitas vs Despesas</h3>
+                <p>Comparativo mensal detalhado</p>
+              </div>
+              <div class="chart-container">
+                <canvas id="reportChart1"></canvas>
+              </div>
+            </div>
+            <div class="chart-card">
+              <div class="chart-header">
+                <h3>Distribuição por Categoria</h3>
+                <p>Onde seu dinheiro está sendo gasto</p>
+              </div>
+              <div class="chart-container">
+                <canvas id="reportChart2"></canvas>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-card">
+            <div class="form-header">
+              <span class="header-icon">🏥</span>
+              <h3>Diagnóstico de Saúde Financeira</h3>
+            </div>
+            <div id="healthAnalysis">
+              <div class="empty-state">
+                <div class="empty-state-icon">📊</div>
+                <h3>Adicione dados para ver a análise</h3>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-actions">
+            <button class="btn btn-primary" onclick="generateFullReport()">
+              <span>📄</span> Gerar Relatório Completo
+            </button>
+            <button class="btn btn-secondary" onclick="window.print()">
+              <span>🖨️</span> Imprimir
+            </button>
+          </div>
+        </section>
+
+        <!-- Histórico Section -->
+        <section id="historico" class="content-section">
+          <div class="form-card">
+            <div class="form-header">
+              <span class="header-icon">📚</span>
+              <h3>Consultar Histórico Mensal</h3>
+            </div>
+            <div class="form-grid">
+              <div class="form-group">
+                <label>Selecionar Mês</label>
+                <input type="month" id="historyMonth" />
+              </div>
+              <div class="form-group btn-group">
+                <button class="btn btn-primary" onclick="loadHistory()">
+                  <span>🔍</span> Carregar Dados
+                </button>
+              </div>
+            </div>
+            <div id="historyContent" class="history-content"></div>
+          </div>
+
+          <div class="chart-card">
+            <div class="chart-header">
+              <h3>Evolução Financeira</h3>
+              <p>Comparativo de todos os meses registrados</p>
+            </div>
+            <div class="chart-container">
+              <canvas id="evolutionChart"></canvas>
+            </div>
+          </div>
+        </section>
+
+        <!-- Configurações Section -->
+        <section id="configuracoes" class="content-section">
+          <div class="form-card danger-card">
+            <div class="form-header">
+              <span class="header-icon">⚠️</span>
+              <div>
+                <h3>Zona de Perigo</h3>
+                <p class="form-subtitle">
+                  Ações irreversíveis - Tenha cuidado!
+                </p>
+              </div>
+            </div>
+
+            <div class="danger-actions">
+              <div class="danger-item">
+                <div class="danger-info">
+                  <h4>Apagar Dados do Mês Atual</h4>
+                  <p>Remove todos os dados do mês selecionado atualmente</p>
+                </div>
+                <button class="btn btn-danger" onclick="clearCurrentMonth()">
+                  🗑️ Apagar Mês Atual
+                </button>
+              </div>
+
+              <div class="danger-item">
+                <div class="danger-info">
+                  <h4>Apagar Período Específico</h4>
+                  <p>Escolha um período para remover completamente</p>
+                </div>
+                <div class="danger-form">
+                  <input type="month" id="deletePeriodMonth" />
+                  <button
+                    class="btn btn-danger"
+                    onclick="clearSpecificPeriod()"
+                  >
+                    🗑️ Apagar Período
+                  </button>
+                </div>
+              </div>
+
+              <div class="danger-item">
+                <div class="danger-info">
+                  <h4>Apagar Todos os Dados</h4>
+                  <p class="warning-text">
+                    ⚠️ Isso apagará TUDO permanentemente!
+                  </p>
+                </div>
+                <button class="btn btn-danger-outline" onclick="clearAllData()">
+                  💥 Apagar Tudo
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-card">
+            <div class="form-header">
+              <span class="header-icon">💾</span>
+              <h3>Backup e Restauração</h3>
+            </div>
+            <div class="backup-actions">
+              <button class="btn btn-secondary" onclick="exportData()">
+                <span>📥</span> Exportar Dados (JSON)
+              </button>
+              <div class="import-section">
+                <label class="btn btn-secondary">
+                  <span>📤</span> Importar Dados
+                  <input
+                    type="file"
+                    id="importFile"
+                    accept=".json"
+                    onchange="importData(this)"
+                    hidden
+                  />
+                </label>
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <!-- Edit Modal -->
+    <div id="editModal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3 id="modalTitle">Editar</h3>
+          <button class="btn-close" onclick="closeModal()">✕</button>
+        </div>
+        <div class="modal-body" id="modalBody">
+          <!-- Dynamic content -->
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" onclick="closeModal()">
+            Cancelar
+          </button>
+          <button
+            class="btn btn-primary"
+            id="modalSaveBtn"
+            onclick="saveEdit()"
+          >
+            Salvar
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <script src="app.js"></script>
+  </body>
+</html>
