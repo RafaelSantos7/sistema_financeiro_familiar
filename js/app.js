@@ -25,6 +25,8 @@ let currentUser = null;
 let currentUserData = null;
 let currentMonth = new Date().toISOString().slice(0, 7);
 let formSubmitLock = false;
+let currentEditingId = null;
+let currentEditingType = null;
 
 // ==========================================
 // INICIALIZAÇÃO PRINCIPAL
@@ -33,17 +35,14 @@ let formSubmitLock = false;
 document.addEventListener("DOMContentLoaded", function () {
   console.log("=== DOM CARREGADO ===");
 
-  // Verificar estado de autenticação em TODOS os navegadores
   onAuthStateChanged(auth, async (user) => {
     if (user) {
-      // Usuário logado no Firebase!
       currentUser = {
         id: user.uid,
         email: user.email,
         name: user.displayName || user.email.split("@")[0],
       };
 
-      // Carregar dados do Firestore
       await loadUserDataFromCloud();
 
       const path = window.location.pathname;
@@ -55,7 +54,6 @@ document.addEventListener("DOMContentLoaded", function () {
         initAppPage();
       }
     } else {
-      // Não logado
       currentUser = null;
       const path = window.location.pathname;
       const page = path.split("/").pop() || "index.html";
@@ -72,11 +70,9 @@ document.addEventListener("DOMContentLoaded", function () {
     }
   });
 
-  // Verificar token de redefinição de senha
   const urlParams = new URLSearchParams(window.location.search);
   const resetToken = urlParams.get("reset");
   if (resetToken) {
-    // Firebase lida com reset de senha via email, não precisa disso
     showNotification(
       "Use o link enviado por email para redefinir senha.",
       "info",
@@ -91,7 +87,6 @@ document.addEventListener("DOMContentLoaded", function () {
 function initLoginPage() {
   console.log("Inicializando login...");
 
-  // Tabs
   const loginTab = document.querySelector('.auth-tab[data-tab="login"]');
   const registerTab = document.querySelector('.auth-tab[data-tab="register"]');
 
@@ -100,14 +95,12 @@ function initLoginPage() {
   if (registerTab)
     registerTab.addEventListener("click", () => switchAuthTab("register"));
 
-  // Forms
   const loginForm = document.getElementById("loginForm");
   const registerForm = document.getElementById("registerForm");
 
   if (loginForm) loginForm.addEventListener("submit", handleLogin);
   if (registerForm) registerForm.addEventListener("submit", handleRegister);
 
-  // Esqueci senha
   const forgotLink = document.getElementById("forgotPasswordLink");
   if (forgotLink) {
     forgotLink.addEventListener("click", function (e) {
@@ -137,7 +130,6 @@ function switchAuthTab(tab) {
   }
 }
 
-// LOGIN COM FIREBASE
 async function handleLogin(e) {
   e.preventDefault();
   console.log("Fazendo login no Firebase...");
@@ -159,7 +151,6 @@ async function handleLogin(e) {
     const user = userCredential.user;
 
     showNotification("Login realizado!", "success");
-    // onAuthStateChanged vai redirecionar automaticamente
   } catch (error) {
     console.error("Erro login:", error);
     let msg = "Email ou senha incorretos!";
@@ -170,7 +161,6 @@ async function handleLogin(e) {
   }
 }
 
-// REGISTRO COM FIREBASE
 async function handleRegister(e) {
   e.preventDefault();
   console.log("Registrando no Firebase...");
@@ -204,8 +194,6 @@ async function handleRegister(e) {
   }
 
   try {
-    // Criar usuário no Firebase Auth
-    // Criar usuário no Firebase Auth
     const userCredential = await createUserWithEmailAndPassword(
       auth,
       email,
@@ -214,12 +202,10 @@ async function handleRegister(e) {
 
     const user = userCredential.user;
 
-    // ✅ salvar nome no Firebase Auth
     await updateProfile(user, {
       displayName: name,
     });
 
-    // Criar documento no Firestore com dados iniciais
     const userData = {
       name: name,
       email: email,
@@ -227,12 +213,13 @@ async function handleRegister(e) {
       familyMembers: [],
       finances: {},
       debts: [],
+      recurringBillTemplates: [],
+      debtPaymentHistory: [],
     };
 
     await setDoc(doc(db, "users", user.uid), userData);
 
     showNotification("Conta criada!", "success");
-    // onAuthStateChanged vai redirecionar
   } catch (error) {
     console.error("Erro registro:", error);
     let msg = "Erro ao criar conta!";
@@ -245,7 +232,6 @@ async function handleRegister(e) {
   }
 }
 
-// CARREGAR DADOS DA NUVEM
 async function loadUserDataFromCloud() {
   if (!currentUser) return;
 
@@ -255,16 +241,20 @@ async function loadUserDataFromCloud() {
 
     if (docSnap.exists()) {
       currentUserData = docSnap.data();
-      // Garantir estrutura mínima
       if (!currentUserData.familyMembers) currentUserData.familyMembers = [];
       if (!currentUserData.finances) currentUserData.finances = {};
       if (!currentUserData.debts) currentUserData.debts = [];
+      if (!currentUserData.recurringBillTemplates)
+        currentUserData.recurringBillTemplates = [];
+      if (!currentUserData.debtPaymentHistory)
+        currentUserData.debtPaymentHistory = [];
     } else {
-      // Criar estrutura inicial se não existir
       currentUserData = {
         familyMembers: [],
         finances: {},
         debts: [],
+        recurringBillTemplates: [],
+        debtPaymentHistory: [],
       };
     }
   } catch (error) {
@@ -273,7 +263,6 @@ async function loadUserDataFromCloud() {
   }
 }
 
-// SALVAR DADOS NA NUVEM
 async function saveUserDataToCloud() {
   if (!currentUser || !currentUserData) return;
 
@@ -288,10 +277,6 @@ async function saveUserDataToCloud() {
     showNotification("Erro ao salvar dados!", "error");
   }
 }
-
-// ==========================================
-// RECUPERAÇÃO DE SENHA (FIREBASE)
-// ==========================================
 
 function showForgotPasswordForm() {
   const container = document.querySelector(".auth-card");
@@ -337,7 +322,6 @@ async function handleForgotPassword(e) {
     setTimeout(backToLogin, 3000);
   } catch (error) {
     console.error("Erro:", error);
-    // Por segurança, não revelamos se email existe ou não
     showNotification(
       "Se este email existir, você receberá instruções.",
       "info",
@@ -352,7 +336,7 @@ function backToLogin(e) {
 }
 
 // ==========================================
-// PÁGINA DO APP (adaptada para Firebase)
+// PÁGINA DO APP
 // ==========================================
 
 function initAppPage() {
@@ -363,21 +347,18 @@ function initAppPage() {
     return;
   }
 
-  // Atualizar info do usuário
   const userNameEl = document.getElementById("userName");
   const userEmailEl = document.getElementById("userEmail");
   if (userNameEl)
     userNameEl.textContent = currentUserData?.name || currentUser.name;
   if (userEmailEl) userEmailEl.textContent = currentUser.email;
 
-  // Configurar mês
   const monthInput = document.getElementById("currentMonth");
   if (monthInput) {
     monthInput.value = currentMonth;
     monthInput.addEventListener("change", changeMonth);
   }
 
-  // Configurar navegação mobile
   window.toggleMobileMenu = function () {
     const sidebar = document.getElementById("sidebar");
     const overlay = document.querySelector(".sidebar-overlay");
@@ -385,14 +366,24 @@ function initAppPage() {
     overlay?.classList.toggle("active");
   };
 
-  // Configurar formulários
   setupForms();
 
-  // Carregar dados (já carregados do Firebase, só renderizar)
-  loadAllData();
+  // GARANTIR que só o dashboard está visível ANTES de carregar dados
+  document.querySelectorAll(".content-section").forEach((section) => {
+    section.classList.remove("active");
+  });
+  const dashboard = document.getElementById("dashboard");
+  if (dashboard) dashboard.classList.add("active");
 
-  // Mostrar dashboard
-  showSection("dashboard");
+  // Atualizar navegação
+  document.querySelectorAll(".nav-item").forEach((item) => {
+    item.classList.remove("active");
+    if (item.getAttribute("onclick")?.includes("dashboard")) {
+      item.classList.add("active");
+    }
+  });
+
+  loadAllData();
 
   console.log("=== APP PRONTO ===");
 }
@@ -405,6 +396,7 @@ function setupForms() {
     { id: "debtForm", handler: addDebt },
     { id: "incomeForm", handler: addIncome },
     { id: "billForm", handler: addBill },
+    { id: "templateForm", handler: createRecurringBillTemplate },
   ];
 
   forms.forEach(({ id, handler }) => {
@@ -424,6 +416,7 @@ function loadAllData() {
   loadDebts();
   loadIncomes();
   loadBills();
+  checkMissingRecurringBills();
   updateDashboard();
   updateReports();
 }
@@ -482,6 +475,8 @@ function showSection(sectionId) {
   if (sectionId === "dashboard") updateDashboard();
   if (sectionId === "relatorios") updateReports();
   if (sectionId === "historico") loadFinancialEvolution();
+  // CORREÇÃO: Só carrega templates quando está na página de configurações
+  if (sectionId === "configuracoes") loadRecurringTemplates();
 }
 
 async function logout() {
@@ -505,12 +500,18 @@ function changeMonth() {
 }
 
 // ==========================================
-// GERENCIAMENTO DE DADOS (Firestore)
+// GERENCIAMENTO DE DADOS
 // ==========================================
 
 function getUserData() {
   if (!currentUserData) {
-    return { familyMembers: [], finances: {}, debts: [] };
+    return {
+      familyMembers: [],
+      finances: {},
+      debts: [],
+      recurringBillTemplates: [],
+      debtPaymentHistory: [],
+    };
   }
   return currentUserData;
 }
@@ -533,6 +534,305 @@ async function saveMonthData(month, data) {
   const userData = getUserData();
   userData.finances[month] = data;
   await saveUserData(userData);
+}
+
+// ==========================================
+// MODAL DE EDIÇÃO UNIVERSAL
+// ==========================================
+
+function openEditModal(type, id, data) {
+  currentEditingId = id;
+  currentEditingType = type;
+
+  const modal = document.getElementById("editModal");
+  const modalTitle = document.getElementById("modalTitle");
+  const modalBody = document.getElementById("modalBody");
+
+  let html = "";
+
+  switch (type) {
+    case "member":
+      modalTitle.textContent = "Editar Membro da Família";
+      html = `
+        <div class="form-group">
+          <label>Nome</label>
+          <input type="text" id="editName" value="${escapeHtml(data.name)}" required>
+        </div>
+        <div class="form-group">
+          <label>Salário/Renda (R$)</label>
+          <input type="number" id="editSalary" step="0.01" value="${data.defaultSalary || 0}" required>
+        </div>
+        <div class="form-group">
+          <label>Tipo de Renda</label>
+          <select id="editType">
+            <option value="salario" ${data.type === "salario" ? "selected" : ""}>Salário Fixo</option>
+            <option value="freelance" ${data.type === "freelance" ? "selected" : ""}>Freelance/Autônomo</option>
+            <option value="aposentadoria" ${data.type === "aposentadoria" ? "selected" : ""}>Aposentadoria</option>
+            <option value="aluguel" ${data.type === "aluguel" ? "selected" : ""}>Aluguel</option>
+            <option value="outro" ${data.type === "outro" ? "selected" : ""}>Outro</option>
+          </select>
+        </div>
+      `;
+      break;
+
+    case "debt":
+      modalTitle.textContent = "Editar Dívida";
+      html = `
+        <div class="form-group">
+          <label>Descrição</label>
+          <input type="text" id="editDescription" value="${escapeHtml(data.description)}" required>
+        </div>
+        <div class="form-group">
+          <label>Credor</label>
+          <input type="text" id="editCreditor" value="${escapeHtml(data.creditor)}" required>
+        </div>
+        <div class="form-group">
+          <label>Valor Total (R$)</label>
+          <input type="number" id="editTotal" step="0.01" value="${data.total}" required>
+        </div>
+        <div class="form-group">
+          <label>Valor da Parcela (R$)</label>
+          <input type="number" id="editInstallment" step="0.01" value="${data.installment}" required>
+        </div>
+        <div class="form-group">
+          <label>Total de Parcelas</label>
+          <input type="number" id="editInstallments" value="${data.installments}" required>
+        </div>
+        <div class="form-group">
+          <label>Parcelas Pagas</label>
+          <input type="number" id="editPaid" value="${data.paid}" required>
+        </div>
+        <div class="form-group">
+          <label>Dia do Vencimento</label>
+          <input type="number" id="editDueDay" min="1" max="31" value="${data.dueDay}" required>
+        </div>
+      `;
+      break;
+
+    case "income":
+      modalTitle.textContent = "Editar Recebimento";
+      html = `
+        <div class="form-group">
+          <label>Descrição</label>
+          <input type="text" id="editDescription" value="${escapeHtml(data.description)}" required>
+        </div>
+        <div class="form-group">
+          <label>Categoria</label>
+          <select id="editCategory">
+            <option value="Extra" ${data.category === "Extra" ? "selected" : ""}>Renda Extra</option>
+            <option value="Investimento" ${data.category === "Investimento" ? "selected" : ""}>Retorno Investimento</option>
+            <option value="Presente" ${data.category === "Presente" ? "selected" : ""}>Presente/Herança</option>
+            <option value="Reembolso" ${data.category === "Reembolso" ? "selected" : ""}>Reembolso</option>
+            <option value="Outro" ${data.category === "Outro" ? "selected" : ""}>Outro</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Valor (R$)</label>
+          <input type="number" id="editAmount" step="0.01" value="${data.amount}" required>
+        </div>
+        <div class="form-group">
+          <label>Data</label>
+          <input type="date" id="editDate" value="${data.date || ""}">
+        </div>
+        <div class="form-group">
+          <label>Recorrente?</label>
+          <select id="editRecurring">
+            <option value="false" ${!data.recurring ? "selected" : ""}>Não</option>
+            <option value="true" ${data.recurring ? "selected" : ""}>Sim</option>
+          </select>
+        </div>
+      `;
+      break;
+
+    case "bill":
+      modalTitle.textContent = "Editar Conta";
+      html = `
+        <div class="form-group">
+          <label>Descrição</label>
+          <input type="text" id="editDescription" value="${escapeHtml(data.description)}" required>
+        </div>
+        <div class="form-group">
+          <label>Categoria</label>
+          <select id="editCategory">
+            <option value="Moradia" ${data.category === "Moradia" ? "selected" : ""}>Moradia</option>
+            <option value="Utilidades" ${data.category === "Utilidades" ? "selected" : ""}>Utilidades</option>
+            <option value="Internet" ${data.category === "Internet" ? "selected" : ""}>Internet/TV</option>
+            <option value="Alimentação" ${data.category === "Alimentação" ? "selected" : ""}>Alimentação</option>
+            <option value="Transporte" ${data.category === "Transporte" ? "selected" : ""}>Transporte</option>
+            <option value="Saúde" ${data.category === "Saúde" ? "selected" : ""}>Saúde</option>
+            <option value="Educação" ${data.category === "Educação" ? "selected" : ""}>Educação</option>
+            <option value="Lazer" ${data.category === "Lazer" ? "selected" : ""}>Lazer</option>
+            <option value="Outros" ${data.category === "Outros" ? "selected" : ""}>Outros</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Valor (R$)</label>
+          <input type="number" id="editAmount" step="0.01" value="${data.amount}" required>
+        </div>
+        <div class="form-group">
+          <label>Data de Vencimento</label>
+          <input type="date" id="editDueDate" value="${data.dueDate}" required>
+        </div>
+        <div class="form-group">
+          <label>Status</label>
+          <select id="editStatus">
+            <option value="Pendente" ${data.status === "Pendente" ? "selected" : ""}>Pendente</option>
+            <option value="Pago" ${data.status === "Pago" ? "selected" : ""}>Pago</option>
+          </select>
+        </div>
+      `;
+      break;
+
+    case "template":
+      modalTitle.textContent = "Editar Template de Conta";
+      html = `
+        <div class="form-group">
+          <label>Descrição</label>
+          <input type="text" id="editDescription" value="${escapeHtml(data.description)}" required>
+        </div>
+        <div class="form-group">
+          <label>Categoria</label>
+          <select id="editCategory">
+            <option value="Moradia" ${data.category === "Moradia" ? "selected" : ""}>Moradia</option>
+            <option value="Utilidades" ${data.category === "Utilidades" ? "selected" : ""}>Utilidades</option>
+            <option value="Internet" ${data.category === "Internet" ? "selected" : ""}>Internet/TV</option>
+            <option value="Telefone" ${data.category === "Telefone" ? "selected" : ""}>Telefone</option>
+            <option value="Outro" ${data.category === "Outro" ? "selected" : ""}>Outro</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Valor Sugerido (R$)</label>
+          <input type="number" id="editDefaultAmount" step="0.01" value="${data.defaultAmount || 0}">
+        </div>
+        <div class="form-group">
+          <label>Dia de Vencimento</label>
+          <input type="number" id="editDueDay" min="1" max="31" value="${data.dueDay}" required>
+        </div>
+        <div class="form-group">
+          <label>Observações</label>
+          <input type="text" id="editNotes" value="${escapeHtml(data.notes || "")}">
+        </div>
+      `;
+      break;
+  }
+
+  modalBody.innerHTML = html;
+  modal.classList.add("active");
+}
+
+async function saveEdit() {
+  if (!currentEditingId || !currentEditingType) return;
+
+  const userData = getUserData();
+
+  try {
+    switch (currentEditingType) {
+      case "member":
+        const member = userData.familyMembers.find(
+          (m) => m.id === currentEditingId,
+        );
+        if (member) {
+          member.name = document.getElementById("editName").value;
+          member.defaultSalary =
+            parseFloat(document.getElementById("editSalary").value) || 0;
+          member.type = document.getElementById("editType").value;
+          await saveUserData(userData);
+          loadFamilyMembers();
+          updateDashboard();
+          showNotification("Membro atualizado!", "success");
+        }
+        break;
+
+      case "debt":
+        const debt = userData.debts.find((d) => d.id === currentEditingId);
+        if (debt) {
+          debt.description = document.getElementById("editDescription").value;
+          debt.creditor = document.getElementById("editCreditor").value;
+          debt.total =
+            parseFloat(document.getElementById("editTotal").value) || 0;
+          debt.installment =
+            parseFloat(document.getElementById("editInstallment").value) || 0;
+          debt.installments =
+            parseInt(document.getElementById("editInstallments").value) || 1;
+          debt.paid = parseInt(document.getElementById("editPaid").value) || 0;
+          debt.dueDay =
+            parseInt(document.getElementById("editDueDay").value) || 1;
+          await saveUserData(userData);
+          loadDebts();
+          updateDashboard();
+          showNotification("Dívida atualizada!", "success");
+        }
+        break;
+
+      case "income":
+        const monthDataIncome = getMonthData();
+        const income = monthDataIncome.incomes.find(
+          (i) => i.id === currentEditingId,
+        );
+        if (income) {
+          income.description = document.getElementById("editDescription").value;
+          income.category = document.getElementById("editCategory").value;
+          income.amount =
+            parseFloat(document.getElementById("editAmount").value) || 0;
+          income.date = document.getElementById("editDate").value;
+          income.recurring =
+            document.getElementById("editRecurring").value === "true";
+          await saveMonthData(currentMonth, monthDataIncome);
+          loadIncomes();
+          updateDashboard();
+          showNotification("Recebimento atualizado!", "success");
+        }
+        break;
+
+      case "bill":
+        const monthDataBill = getMonthData();
+        const bill = monthDataBill.bills.find((b) => b.id === currentEditingId);
+        if (bill) {
+          bill.description = document.getElementById("editDescription").value;
+          bill.category = document.getElementById("editCategory").value;
+          bill.amount =
+            parseFloat(document.getElementById("editAmount").value) || 0;
+          bill.dueDate = document.getElementById("editDueDate").value;
+          bill.status = document.getElementById("editStatus").value;
+          await saveMonthData(currentMonth, monthDataBill);
+          loadBills();
+          updateDashboard();
+          showNotification("Conta atualizada!", "success");
+        }
+        break;
+
+      case "template":
+        const template = userData.recurringBillTemplates.find(
+          (t) => t.id === currentEditingId,
+        );
+        if (template) {
+          template.description =
+            document.getElementById("editDescription").value;
+          template.category = document.getElementById("editCategory").value;
+          template.defaultAmount =
+            parseFloat(document.getElementById("editDefaultAmount").value) || 0;
+          template.dueDay =
+            parseInt(document.getElementById("editDueDay").value) || 1;
+          template.notes = document.getElementById("editNotes").value;
+          await saveUserData(userData);
+          loadRecurringTemplates();
+          showNotification("Template atualizado!", "success");
+        }
+        break;
+    }
+
+    closeModal();
+  } catch (error) {
+    console.error("Erro ao salvar:", error);
+    showNotification("Erro ao salvar alterações!", "error");
+  }
+}
+
+function closeModal() {
+  const modal = document.getElementById("editModal");
+  if (modal) modal.classList.remove("active");
+  currentEditingId = null;
+  currentEditingType = null;
 }
 
 // ==========================================
@@ -672,24 +972,12 @@ async function addFamilyMember(e) {
   }, 1000);
 }
 
-async function editFamilyMember(id) {
+function editFamilyMember(id) {
   const userData = getUserData();
   const member = userData.familyMembers.find((m) => m.id === id);
   if (!member) return;
 
-  const newName = prompt("Nome:", member.name);
-  if (newName === null) return;
-
-  const newSalary = prompt("Salário (R$):", member.defaultSalary || 0);
-  if (newSalary === null) return;
-
-  member.name = newName.trim() || member.name;
-  member.defaultSalary = parseFloat(newSalary) || member.defaultSalary;
-
-  await saveUserData(userData);
-  loadFamilyMembers();
-  updateDashboard();
-  showNotification("Membro atualizado!", "success");
+  openEditModal("member", id, member);
 }
 
 async function deleteFamilyMember(id) {
@@ -705,7 +993,7 @@ async function deleteFamilyMember(id) {
 }
 
 // ==========================================
-// DÍVIDAS
+// DÍVIDAS COM HISTÓRICO GLOBAL
 // ==========================================
 
 async function addDebt(e) {
@@ -733,14 +1021,16 @@ async function addDebt(e) {
   const userData = getUserData();
   if (!userData.debts) userData.debts = [];
 
+  const debtId = Date.now().toString();
+
   userData.debts.push({
-    id: Date.now().toString(),
+    id: debtId,
     description,
     creditor,
     total,
     installment,
     installments,
-    paid,
+    paid: 0,
     dueDay,
     createdAt: new Date().toISOString(),
   });
@@ -763,75 +1053,319 @@ async function addDebt(e) {
 function loadDebts() {
   const userData = getUserData();
   const debts = userData.debts || [];
+  const history = userData.debtPaymentHistory || [];
+
+  const activeDebts = debts;
 
   const tbody = document.getElementById("debtTableBody");
   const count = document.getElementById("debtCount");
 
-  if (count) count.textContent = `${debts.length} registro(s)`;
+  // Contar apenas dívidas ativas
+  if (count) count.textContent = `${activeDebts.length} registro(s)`;
 
-  if (tbody) {
-    if (debts.length === 0) {
-      tbody.innerHTML = `
-        <tr class="empty-row">
-          <td colspan="8">
-            <div class="empty-state small">
-              <div class="empty-state-icon">💳</div>
-              <h4>Nenhuma dívida cadastrada</h4>
-            </div>
-          </td>
-        </tr>
-      `;
-    } else {
-      tbody.innerHTML = debts
-        .map((d) => {
-          const paidAmount = d.installment * d.paid;
-          const remaining = Math.max(d.total - paidAmount, 0);
-          const progress =
-            d.installments > 0 ? (d.paid / d.installments) * 100 : 0;
+  if (!tbody) return;
 
-          return `
-            <tr>
-              <td><strong>${escapeHtml(d.description)}</strong></td>
-              <td>${escapeHtml(d.creditor)}</td>
-              <td>${formatCurrency(d.total)}</td>
-              <td>${formatCurrency(d.installment)}</td>
-              <td>
-                <div style="display: flex; align-items: center; gap: 0.5rem;">
-                  <div style="flex: 1; height: 6px; background: var(--bg-card); border-radius: 3px; overflow: hidden;">
-                    <div style="width: ${Math.min(progress, 100)}%; height: 100%; background: var(--gradient-gold);"></div>
-                  </div>
-                  <span style="font-size: 0.85rem;">${d.paid}/${d.installments}</span>
-                </div>
-              </td>
-              <td>Dia ${d.dueDay}</td>
-              <td style="color: var(--accent-rose); font-weight: 600;">${formatCurrency(remaining)}</td>
-              <td>
-                <div class="action-btns">
-                  <button class="btn-icon btn-edit" onclick="editDebt('${d.id}')" title="Editar">✏️</button>
-                  <button class="btn-icon btn-delete" onclick="deleteDebt('${d.id}')" title="Excluir">🗑️</button>
-                </div>
-              </td>
-            </tr>
-          `;
-        })
-        .join("");
-    }
+  if (activeDebts.length === 0) {
+    tbody.innerHTML = `
+      <tr class="empty-row">
+        <td colspan="9">
+          <div class="empty-state small">
+            <div class="empty-state-icon">💳</div>
+            <h4>Nenhuma dívida ativa</h4>
+            <p>Todas as suas dívidas estão quitadas!</p>
+          </div>
+        </td>
+      </tr>
+    `;
+    return;
   }
+
+  tbody.innerHTML = activeDebts
+    .map((d) => {
+      const paidAmount = d.installment * d.paid;
+      const remaining = Math.max(d.total - paidAmount, 0);
+      const progress = d.installments > 0 ? (d.paid / d.installments) * 100 : 0;
+
+      const paidThisMonth = history.some(
+        (h) => h.debtId === d.id && h.month === currentMonth,
+      );
+      const debtHistory = history
+        .filter((h) => h.debtId === d.id)
+        .sort((a, b) => new Date(b.paidAt) - new Date(a.paidAt));
+
+      return `
+      <tr>
+        <td><strong>${escapeHtml(d.description)}</strong></td>
+        <td>${escapeHtml(d.creditor)}</td>
+        <td>${formatCurrency(d.total)}</td>
+        <td>${formatCurrency(d.installment)}</td>
+        <td>
+          <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <div style="flex: 1; height: 6px; background: var(--bg-card); border-radius: 3px; overflow: hidden;">
+              <div style="width: ${Math.min(progress, 100)}%; height: 100%; background: var(--gradient-gold);"></div>
+            </div>
+            <span style="font-size: 0.85rem;">${d.paid}/${d.installments}</span>
+          </div>
+        </td>
+        <td>Dia ${d.dueDay}</td>
+        <td style="color: var(--accent-rose); font-weight: 600;">${formatCurrency(remaining)}</td>
+        <td>
+          ${
+            paidThisMonth
+              ? '<span class="status-badge status-paid" style="background: rgba(16, 185, 129, 0.2); color: var(--accent-emerald);">✓ Pago</span>'
+              : d.paid >= d.installments
+                ? '<span class="status-badge" style="background: rgba(16, 185, 129, 0.2); color: var(--accent-emerald);">Quitado</span>'
+                : `<button class="btn btn-primary btn-small" onclick="payDebtInstallment('${d.id}')" style="padding: 0.25rem 0.75rem; font-size: 0.85rem;">
+                  Pagar
+                 </button>`
+          }
+        </td>
+        <td>
+          <div class="action-btns">
+            <button class="btn-icon" onclick="showDebtHistory('${d.id}')" title="Ver histórico">📊</button>
+            <button class="btn-icon btn-edit" onclick="editDebt('${d.id}')" title="Editar">✏️</button>
+            <button class="btn-icon btn-delete" onclick="deleteDebt('${d.id}')" title="Excluir">🗑️</button>
+          </div>
+        </td>
+      </tr>
+      ${
+        debtHistory.length > 0
+          ? `
+      <tr class="history-row" style="background: rgba(0,0,0,0.2);">
+        <td colspan="9" style="padding: 0.5rem 1rem; font-size: 0.85rem;">
+          <strong>Últimos pagamentos:</strong> 
+          ${debtHistory
+            .slice(0, 3)
+            .map(
+              (h) =>
+                `${formatMonthShort(h.month)}: ${formatCurrency(h.amount)}`,
+            )
+            .join(" • ")}
+          ${debtHistory.length > 3 ? ` <span style="color: var(--text-muted);">(+${debtHistory.length - 3} anteriores)</span>` : ""}
+        </td>
+      </tr>
+      `
+          : ""
+      }
+    `;
+    })
+    .join("");
 }
 
-async function editDebt(id) {
+async function payDebtInstallment(debtId) {
+  const userData = getUserData();
+  const debt = userData.debts.find((d) => d.id === debtId);
+  if (!debt) return;
+
+  if (debt.paid >= debt.installments) {
+    showNotification("Esta dívida já está quitada!", "info");
+    return;
+  }
+
+  // Abrir modal personalizado para pagamento
+  const modal = document.getElementById("editModal");
+  const modalTitle = document.getElementById("modalTitle");
+  const modalBody = document.getElementById("modalBody");
+
+  modalTitle.textContent = `Pagar Parcela - ${debt.description}`;
+  modalBody.innerHTML = `
+    <div style="margin-bottom: 1.5rem; padding: 1rem; background: var(--bg-primary); border-radius: 8px;">
+      <p><strong>Dívida:</strong> ${escapeHtml(debt.description)}</p>
+      <p><strong>Parcela:</strong> ${debt.paid + 1} de ${debt.installments}</p>
+      <p><strong>Valor sugerido:</strong> ${formatCurrency(debt.installment)}</p>
+    </div>
+    <div class="form-group">
+      <label>Valor do Pagamento (R$)</label>
+      <input type="number" id="paymentAmount" step="0.01" value="${debt.installment}" required>
+    </div>
+    <div class="form-group">
+      <label>Mês de Referência</label>
+      <input type="month" id="paymentMonth" value="${currentMonth}" required>
+    </div>
+  `;
+
+  // Alterar o botão de salvar para processar pagamento
+  const saveBtn = document.getElementById("modalSaveBtn");
+  const originalOnclick = saveBtn.onclick;
+  saveBtn.onclick = async function () {
+    const amount = parseFloat(document.getElementById("paymentAmount").value);
+    const month = document.getElementById("paymentMonth").value;
+
+    if (isNaN(amount) || amount <= 0) {
+      showNotification("Valor inválido!", "error");
+      return;
+    }
+
+    if (!/^\d{4}-\d{2}$/.test(month)) {
+      showNotification("Formato de mês inválido!", "error");
+      return;
+    }
+
+    await processDebtPayment(debtId, amount, month);
+    closeModal();
+    saveBtn.onclick = originalOnclick; // Restaurar função original
+  };
+
+  modal.classList.add("active");
+  currentEditingId = debtId;
+  currentEditingType = "payment";
+}
+
+async function processDebtPayment(debtId, amount, month) {
+  const userData = getUserData();
+  const debt = userData.debts.find((d) => d.id === debtId);
+  if (!debt) return;
+
+  if (!userData.debtPaymentHistory) userData.debtPaymentHistory = [];
+
+  const alreadyPaidThisMonth = userData.debtPaymentHistory.some(
+    (h) => h.debtId === debtId && h.month === month,
+  );
+
+  if (alreadyPaidThisMonth) {
+    if (
+      !confirm(
+        `Já existe um pagamento registrado para "${debt.description}" em ${formatMonth(month)}. Deseja substituir?`,
+      )
+    ) {
+      return;
+    }
+    userData.debtPaymentHistory = userData.debtPaymentHistory.filter(
+      (h) => !(h.debtId === debtId && h.month === month),
+    );
+  }
+
+  const payment = {
+    id: Date.now().toString(),
+    debtId: debtId,
+    debtDescription: debt.description,
+    amount: amount,
+    month: month,
+    paidAt: new Date().toISOString(),
+    installmentNumber: debt.paid + 1,
+  };
+
+  userData.debtPaymentHistory.push(payment);
+  debt.paid = (debt.paid || 0) + 1;
+  debt.lastPaymentMonth = month;
+  debt.lastPaymentDate = payment.paidAt;
+
+  await saveUserData(userData);
+
+  loadDebts();
+  updateDashboard();
+  showNotification(
+    `Pagamento registrado: ${debt.description} - ${formatMonth(month)}`,
+    "success",
+  );
+}
+
+function showDebtHistory(debtId) {
+  const userData = getUserData();
+  const debt = userData.debts.find((d) => d.id === debtId);
+  if (!debt) return;
+
+  const history = (userData.debtPaymentHistory || [])
+    .filter((h) => h.debtId === debtId)
+    .sort((a, b) => new Date(b.paidAt) - new Date(a.paidAt));
+
+  const modal = document.createElement("div");
+  modal.id = "debtHistoryModal";
+  modal.className = "modal active";
+  modal.innerHTML = `
+    <div class="modal-content" style="max-width: 600px; max-height: 80vh; overflow-y: auto;">
+      <div class="modal-header">
+        <h3>📊 Histórico de Pagamentos</h3>
+        <h4 style="color: var(--accent-gold); margin-top: 0.5rem;">${escapeHtml(debt.description)}</h4>
+        <button class="modal-close" onclick="closeDebtHistoryModal()">×</button>
+      </div>
+      <div class="modal-body">
+        <div style="margin-bottom: 1.5rem; padding: 1rem; background: var(--bg-primary); border-radius: 8px;">
+          <p><strong>Total:</strong> ${formatCurrency(debt.total)}</p>
+          <p><strong>Parcela:</strong> ${formatCurrency(debt.installment)}</p>
+          <p><strong>Progresso:</strong> ${debt.paid} de ${debt.installments} parcelas (${((debt.paid / debt.installments) * 100).toFixed(1)}%)</p>
+          <p><strong>Restante:</strong> ${formatCurrency(Math.max(debt.total - debt.installment * debt.paid, 0))}</p>
+        </div>
+        
+        ${
+          history.length === 0
+            ? `
+          <div class="empty-state small">
+            <p>Nenhum pagamento registrado ainda.</p>
+          </div>
+        `
+            : `
+          <table class="data-table" style="font-size: 0.9rem;">
+            <thead>
+              <tr>
+                <th>Parcela</th>
+                <th>Mês Referência</th>
+                <th>Valor</th>
+                <th>Data Pagamento</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${history
+                .map(
+                  (h, index) => `
+                <tr>
+                  <td>#${h.installmentNumber || history.length - index}</td>
+                  <td>${formatMonth(h.month)}</td>
+                  <td style="color: var(--accent-emerald); font-weight: 600;">${formatCurrency(h.amount)}</td>
+                  <td>${formatDate(h.paidAt)}</td>
+                </tr>
+              `,
+                )
+                .join("")}
+            </tbody>
+          </table>
+          
+          <div style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--border);">
+            <h4 style="margin-bottom: 0.5rem;">Resumo por Ano</h4>
+            ${getYearlySummary(history)}
+          </div>
+        `
+        }
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+}
+
+function closeDebtHistoryModal() {
+  const modal = document.getElementById("debtHistoryModal");
+  if (modal) modal.remove();
+}
+
+function getYearlySummary(history) {
+  const byYear = {};
+  history.forEach((h) => {
+    const year = h.month.split("-")[0];
+    if (!byYear[year]) byYear[year] = { count: 0, total: 0 };
+    byYear[year].count++;
+    byYear[year].total += h.amount;
+  });
+
+  return Object.entries(byYear)
+    .sort((a, b) => b[0] - a[0])
+    .map(
+      ([year, data]) => `
+    <div style="display: flex; justify-content: space-between; padding: 0.5rem; background: var(--bg-card); margin-bottom: 0.5rem; border-radius: 6px;">
+      <span>${year}</span>
+      <span>${data.count} pagamentos • ${formatCurrency(data.total)}</span>
+    </div>
+  `,
+    )
+    .join("");
+}
+
+function editDebt(id) {
   const userData = getUserData();
   const debt = userData.debts.find((d) => d.id === id);
   if (!debt) return;
 
-  const newPaid = prompt("Parcelas pagas:", debt.paid);
-  if (newPaid === null) return;
-
-  debt.paid = parseInt(newPaid) || debt.paid;
-  await saveUserData(userData);
-  loadDebts();
-  updateDashboard();
-  showNotification("Dívida atualizada!", "success");
+  openEditModal("debt", id, debt);
 }
 
 async function deleteDebt(id) {
@@ -846,8 +1380,109 @@ async function deleteDebt(id) {
   showNotification("Dívida excluída!", "success");
 }
 
+function loadPaidOffDebts() {
+  const userData = getUserData();
+  const debts = userData.debts || [];
+  const history = userData.debtPaymentHistory || [];
+
+  // Filtrar apenas dívidas quitadas
+  const paidOffDebts = debts.filter((d) => d.paid >= d.installments);
+
+  const section = document.getElementById("paidDebtsSection");
+  const countEl = document.getElementById("paidDebtsCount");
+  const listEl = document.getElementById("paidDebtsList");
+
+  if (!section || !countEl || !listEl) return;
+
+  // Mostrar/esconder seção baseado em ter dívidas quitadas
+  if (paidOffDebts.length === 0) {
+    section.style.display = "none";
+    return;
+  }
+
+  section.style.display = "block";
+  section.classList.add("has-debts");
+  countEl.textContent = paidOffDebts.length;
+
+  // Renderizar lista
+  listEl.innerHTML = paidOffDebts
+    .map((d) => {
+      const lastPayment = history
+        .filter((h) => h.debtId === d.id)
+        .sort((a, b) => new Date(b.paidAt) - new Date(a.paidAt))[0];
+
+      return `
+      <div class="paid-debt-card">
+        <div class="paid-debt-info">
+          <div class="paid-debt-main">
+            <span class="paid-debt-name">${escapeHtml(d.description)}</span>
+            <span class="paid-debt-badge">
+              ✓ Quitado
+            </span>
+          </div>
+          <div class="paid-debt-details">
+            <span class="paid-debt-detail">
+              💼 <strong>${escapeHtml(d.creditor)}</strong>
+            </span>
+            <span class="paid-debt-detail">
+              📅 Vencimento dia <strong>${d.dueDay}</strong>
+            </span>
+            ${
+              lastPayment
+                ? `
+              <span class="paid-debt-detail">
+                🗓️ Quitado em <strong>${formatMonth(lastPayment.month)}</strong>
+              </span>
+            `
+                : ""
+            }
+          </div>
+        </div>
+        <div class="paid-debt-amount">
+          <div class="paid-debt-total">${formatCurrency(d.total)}</div>
+          <div class="paid-debt-installments">${d.installments}x ${formatCurrency(d.installment)}</div>
+        </div>
+        <div class="paid-debt-actions">
+          <button class="btn-icon" onclick="showDebtHistory('${d.id}')" title="Ver histórico completo">📊</button>
+          <button class="btn-icon btn-delete" onclick="deletePaidDebt('${d.id}')" title="Remover do histórico">🗑️</button>
+        </div>
+      </div>
+    `;
+    })
+    .join("");
+}
+
+function togglePaidDebts() {
+  const content = document.getElementById("paidDebtsContent");
+  const toggle = document.getElementById("paidDebtsToggle");
+
+  if (!content || !toggle) return;
+
+  content.classList.toggle("collapsed");
+  toggle.classList.toggle("collapsed");
+}
+
+async function deletePaidDebt(id) {
+  if (!confirm("Remover esta dívida quitada do histórico?")) return;
+
+  const userData = getUserData();
+
+  // Remover do array de dívidas
+  userData.debts = userData.debts.filter((d) => d.id !== id);
+
+  // Remover histórico de pagamentos relacionado
+  userData.debtPaymentHistory = (userData.debtPaymentHistory || []).filter(
+    (h) => h.debtId !== id,
+  );
+
+  await saveUserData(userData);
+
+  loadPaidOffDebts();
+  showNotification("Dívida removida do histórico!", "success");
+}
+
 // ==========================================
-// RECEBIMENTOS (RENDA EXTRA)
+// RECEBIMENTOS
 // ==========================================
 
 async function addIncome(e) {
@@ -945,19 +1580,12 @@ function loadIncomes() {
   }
 }
 
-async function editIncome(id) {
+function editIncome(id) {
   const monthData = getMonthData();
   const income = monthData.incomes.find((i) => i.id === id);
   if (!income) return;
 
-  const newAmount = prompt("Novo valor (R$):", income.amount);
-  if (newAmount === null) return;
-
-  income.amount = parseFloat(newAmount) || income.amount;
-  await saveMonthData(currentMonth, monthData);
-  loadIncomes();
-  updateDashboard();
-  showNotification("Recebimento atualizado!", "success");
+  openEditModal("income", id, income);
 }
 
 async function deleteIncome(id) {
@@ -1105,19 +1733,12 @@ async function toggleBillStatus(id) {
   showNotification(`Conta ${bill.status.toLowerCase()}!`, "success");
 }
 
-async function editBill(id) {
+function editBill(id) {
   const monthData = getMonthData();
   const bill = monthData.bills.find((b) => b.id === id);
   if (!bill) return;
 
-  const newAmount = prompt("Novo valor (R$):", bill.amount);
-  if (newAmount === null) return;
-
-  bill.amount = parseFloat(newAmount) || bill.amount;
-  await saveMonthData(currentMonth, monthData);
-  loadBills();
-  updateDashboard();
-  showNotification("Conta atualizada!", "success");
+  openEditModal("bill", id, bill);
 }
 
 async function deleteBill(id) {
@@ -1133,45 +1754,520 @@ async function deleteBill(id) {
 }
 
 // ==========================================
-// DASHBOARD
+// CONTAS RECORRENTES
 // ==========================================
 
+async function createRecurringBillTemplate(e) {
+  e.preventDefault();
+
+  const description = document
+    .getElementById("templateDescription")
+    ?.value.trim();
+  const category = document.getElementById("templateCategory")?.value;
+  const defaultAmount =
+    parseFloat(document.getElementById("templateDefaultAmount")?.value) || 0;
+  const dueDay =
+    parseInt(document.getElementById("templateDueDay")?.value) || 1;
+  const notes = document.getElementById("templateNotes")?.value.trim();
+
+  if (!description || !category) {
+    showNotification("Preencha descrição e categoria!", "error");
+    return;
+  }
+
+  const userData = getUserData();
+  if (!userData.recurringBillTemplates) userData.recurringBillTemplates = [];
+
+  const exists = userData.recurringBillTemplates.find(
+    (t) => t.description.toLowerCase() === description.toLowerCase(),
+  );
+  if (exists) {
+    showNotification("Já existe um template com este nome!", "error");
+    return;
+  }
+
+  const template = {
+    id: Date.now().toString(),
+    description,
+    category,
+    defaultAmount,
+    dueDay,
+    notes,
+    createdAt: new Date().toISOString(),
+    lastUsedMonth: null,
+    lastAmount: defaultAmount,
+  };
+
+  userData.recurringBillTemplates.push(template);
+  await saveUserData(userData);
+
+  loadRecurringTemplates();
+  showNotification("Template de conta recorrente criado!", "success");
+  e.target.reset();
+}
+
+function loadRecurringTemplates() {
+  const userData = getUserData();
+  const templates = userData.recurringBillTemplates || [];
+
+  const container = document.getElementById("recurringTemplatesList");
+  if (!container) return;
+
+  if (templates.length === 0) {
+    container.innerHTML = `
+      <div class="empty-state small">
+        <div class="empty-state-icon">📋</div>
+        <h4>Nenhum template criado</h4>
+        <p>Crie templates para contas que se repetem todo mês (luz, água, internet)</p>
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = templates
+    .map(
+      (t) => `
+    <div class="template-card" style="
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1rem;
+      margin-bottom: 1rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    ">
+      <div>
+        <h4 style="margin: 0 0 0.5rem 0; color: var(--accent-gold);">${escapeHtml(t.description)}</h4>
+        <p style="margin: 0; font-size: 0.9rem; color: var(--text-secondary);">
+          ${escapeHtml(t.category)} • Vence dia ${t.dueDay}
+          ${t.defaultAmount > 0 ? `• Sugestão: ${formatCurrency(t.defaultAmount)}` : ""}
+        </p>
+        ${t.notes ? `<p style="margin: 0.25rem 0 0 0; font-size: 0.8rem; color: var(--text-muted);">${escapeHtml(t.notes)}</p>` : ""}
+      </div>
+      <div class="action-btns">
+        <button class="btn-icon btn-edit" onclick="useTemplateForCurrentMonth('${t.id}')" title="Usar este mês">📅</button>
+        <button class="btn-icon btn-edit" onclick="editTemplate('${t.id}')" title="Editar">✏️</button>
+        <button class="btn-icon btn-delete" onclick="deleteTemplate('${t.id}')" title="Excluir">🗑️</button>
+      </div>
+    </div>
+  `,
+    )
+    .join("");
+}
+
+async function useTemplateForCurrentMonth(templateId) {
+  const userData = getUserData();
+  const template = userData.recurringBillTemplates.find(
+    (t) => t.id === templateId,
+  );
+  if (!template) return;
+
+  const modal = document.getElementById("editModal");
+  const modalTitle = document.getElementById("modalTitle");
+  const modalBody = document.getElementById("modalBody");
+
+  modalTitle.textContent = `Usar Template - ${template.description}`;
+  modalBody.innerHTML = `
+    <div style="margin-bottom: 1.5rem; padding: 1rem; background: var(--bg-primary); border-radius: 8px;">
+      <p><strong>Template:</strong> ${escapeHtml(template.description)}</p>
+      <p><strong>Categoria:</strong> ${template.category}</p>
+      <p><strong>Vencimento:</strong> Dia ${template.dueDay}</p>
+      ${template.lastAmount ? `<p><strong>Último valor:</strong> ${formatCurrency(template.lastAmount)}</p>` : ""}
+    </div>
+    <div class="form-group">
+      <label>Valor para ${formatMonth(currentMonth)} (R$)</label>
+      <input type="number" id="templateUseAmount" step="0.01" value="${template.lastAmount || template.defaultAmount || ""}" required>
+    </div>
+  `;
+
+  const saveBtn = document.getElementById("modalSaveBtn");
+  const originalOnclick = saveBtn.onclick;
+  saveBtn.onclick = async function () {
+    const amount = parseFloat(
+      document.getElementById("templateUseAmount").value,
+    );
+
+    if (isNaN(amount) || amount < 0) {
+      showNotification("Valor inválido!", "error");
+      return;
+    }
+
+    await processTemplateUse(templateId, amount);
+    closeModal();
+    saveBtn.onclick = originalOnclick;
+  };
+
+  modal.classList.add("active");
+}
+
+async function processTemplateUse(templateId, amount) {
+  const userData = getUserData();
+  const template = userData.recurringBillTemplates.find(
+    (t) => t.id === templateId,
+  );
+  if (!template) return;
+
+  const dueDate = `${currentMonth}-${String(template.dueDay).padStart(2, "0")}`;
+
+  const monthData = getMonthData();
+  const existing = monthData.bills.find(
+    (b) =>
+      b.templateId === templateId && b.description === template.description,
+  );
+
+  if (existing) {
+    if (
+      !confirm(
+        `Já existe uma "${template.description}" neste mês. Deseja substituir?`,
+      )
+    ) {
+      return;
+    }
+    monthData.bills = monthData.bills.filter((b) => b.id !== existing.id);
+  }
+
+  const newBill = {
+    id: Date.now().toString(),
+    description: template.description,
+    category: template.category,
+    amount: amount,
+    dueDate: dueDate,
+    status: "Pendente",
+    recurring: true,
+    templateId: templateId,
+    createdAt: new Date().toISOString(),
+  };
+
+  monthData.bills.push(newBill);
+  await saveMonthData(currentMonth, monthData);
+
+  template.lastAmount = amount;
+  template.lastUsedMonth = currentMonth;
+  await saveUserData(userData);
+
+  loadBills();
+  updateDashboard();
+  showNotification(
+    `Conta "${template.description}" adicionada: ${formatCurrency(amount)}`,
+    "success",
+  );
+}
+
+function checkMissingRecurringBills() {
+  const userData = getUserData();
+  const templates = userData.recurringBillTemplates || [];
+  if (templates.length === 0) return;
+
+  const monthData = getMonthData();
+
+  const missing = templates.filter((t) => {
+    const exists = monthData.bills.some(
+      (b) =>
+        b.templateId === t.id ||
+        b.description.toLowerCase() === t.description.toLowerCase(),
+    );
+    return !exists;
+  });
+
+  const container = document.getElementById("recurringSuggestions");
+  if (!container) return;
+
+  if (missing.length > 0) {
+    container.innerHTML = `
+      <div class="alert-item warning" style="margin-bottom: 1rem; background: rgba(245, 158, 11, 0.1); border-left: 4px solid var(--accent-gold); padding: 1rem; border-radius: 8px;">
+        <div class="alert-icon">📋</div>
+        <div class="alert-content">
+          <h4 style="margin: 0 0 0.5rem 0; color: var(--accent-gold);">Contas recorrentes pendentes</h4>
+          <p style="margin: 0; color: var(--text-secondary);">Você ainda não adicionou: <strong>${missing.map((m) => m.description).join(", ")}</strong></p>
+          <button onclick="showRecurringSuggestions()" class="btn btn-primary" style="margin-top: 0.5rem; padding: 0.5rem 1rem; font-size: 0.9rem;">
+            Ver Sugestões
+          </button>
+        </div>
+      </div>
+    `;
+  } else {
+    container.innerHTML = "";
+  }
+}
+
+function showRecurringSuggestions() {
+  const userData = getUserData();
+  const templates = userData.recurringBillTemplates || [];
+  const monthData = getMonthData();
+
+  const missing = templates.filter((t) => {
+    const exists = monthData.bills.some(
+      (b) =>
+        b.templateId === t.id ||
+        b.description.toLowerCase() === t.description.toLowerCase(),
+    );
+    return !exists;
+  });
+
+  if (missing.length === 0) {
+    showNotification(
+      "Todas as contas recorrentes já foram adicionadas!",
+      "success",
+    );
+    return;
+  }
+
+  let html = `<h3 style="margin-bottom: 1rem;">Adicionar Contas do Mês</h3><div style="display: grid; gap: 1rem;">`;
+
+  missing.forEach((t) => {
+    html += `
+      <div style="background: var(--bg-card); padding: 1rem; border-radius: 8px; display: flex; justify-content: space-between; align-items: center;">
+        <div>
+          <strong>${escapeHtml(t.description)}</strong>
+          <p style="margin: 0; font-size: 0.85rem; color: var(--text-muted);">${t.category} • Vence dia ${t.dueDay}</p>
+        </div>
+        <button onclick="useTemplateForCurrentMonth('${t.id}')" class="btn btn-primary" style="padding: 0.5rem 1rem;">
+          Adicionar
+        </button>
+      </div>
+    `;
+  });
+
+  html += `</div>`;
+
+  showModal("Contas Recorrentes Pendentes", html);
+}
+
+function editTemplate(id) {
+  const userData = getUserData();
+  const template = userData.recurringBillTemplates.find((t) => t.id === id);
+  if (!template) return;
+
+  openEditModal("template", id, template);
+}
+
+async function deleteTemplate(id) {
+  if (!confirm("Excluir este template?")) return;
+  const userData = getUserData();
+  userData.recurringBillTemplates = userData.recurringBillTemplates.filter(
+    (t) => t.id !== id,
+  );
+  await saveUserData(userData);
+  loadRecurringTemplates();
+  showNotification("Template excluído!", "success");
+}
+
+// ==========================================
+// DASHBOARD
+// ==========================================
 function updateDashboard() {
   const monthData = getMonthData();
   const userData = getUserData();
 
+  // === MÊS ANTERIOR PARA COMPARAÇÃO ===
+  const [year, month] = currentMonth.split("-").map(Number);
+  let prevYear = year;
+  let prevMonth = month - 1;
+
+  if (prevMonth === 0) {
+    prevMonth = 12;
+    prevYear--;
+  }
+
+  const prevMonthStr = `${prevYear}-${String(prevMonth).padStart(2, "0")}`;
+  const prevMonthData = getMonthData(prevMonthStr);
+  const prevUserData = getUserData();
+
+  // === RENDA DA FAMÍLIA ===
   const familyIncome = (userData.familyMembers || []).reduce(
     (sum, m) => sum + (parseFloat(m.defaultSalary) || 0),
     0,
   );
+
+  const prevFamilyIncome = (prevUserData.familyMembers || []).reduce(
+    (sum, m) => sum + (parseFloat(m.defaultSalary) || 0),
+    0,
+  );
+
+  // === RENDAS EXTRAS ===
   const extraIncome = (monthData.incomes || []).reduce(
-    (sum, i) => sum + i.amount,
+    (sum, i) => sum + (parseFloat(i.amount) || 0),
     0,
   );
+
+  const prevExtraIncome = (prevMonthData.incomes || []).reduce(
+    (sum, i) => sum + (parseFloat(i.amount) || 0),
+    0,
+  );
+
   const totalIncome = familyIncome + extraIncome;
+  const prevTotalIncome = prevFamilyIncome + prevExtraIncome;
 
+  // === CONTAS DO MÊS ===
   const totalBills = (monthData.bills || []).reduce(
-    (sum, b) => sum + (b.status !== "Pago" ? b.amount : 0),
+    (sum, b) => sum + (parseFloat(b.amount) || 0),
     0,
   );
-  const totalDebts = (userData.debts || []).reduce(
-    (sum, d) => sum + (d.installment || 0),
-    0,
-  );
-  const balance = totalIncome - totalBills - totalDebts;
 
+  const prevTotalBills = (prevMonthData.bills || []).reduce(
+    (sum, b) => sum + (parseFloat(b.amount) || 0),
+    0,
+  );
+
+  // === HISTÓRICO DE PAGAMENTOS ===
+  const history = userData.debtPaymentHistory || [];
+  const debtsPaidThisMonth = history.filter((h) => h.month === currentMonth);
+
+  // === PARCELAS DAS DÍVIDAS (CORRETO PARA TODOS OS MESES) ===
+  const totalDebtInstallments = (userData.debts || []).reduce((sum, d) => {
+    const totalInstallments = parseInt(d.installments) || 1;
+    const paidInstallments = parseInt(d.paid) || 0;
+
+    const remaining = totalInstallments - paidInstallments;
+
+    if (remaining > 0) {
+      return sum + (parseFloat(d.installment) || 0);
+    }
+
+    return sum;
+  }, 0);
+
+  const prevTotalDebtInstallments = totalDebtInstallments;
+
+  // === DESPESAS TOTAIS ===
+  const totalExpenses = totalBills + totalDebtInstallments;
+  const prevTotalExpenses = prevTotalBills + prevTotalDebtInstallments;
+
+  // === SALDO DISPONÍVEL ===
+  const balance = totalIncome - totalExpenses;
+  const prevBalance = prevTotalIncome - prevTotalExpenses;
+
+  // === ELEMENTOS DO DASHBOARD ===
   const incomeEl = document.getElementById("totalIncome");
   const debtsEl = document.getElementById("totalDebts");
   const billsEl = document.getElementById("totalBills");
+  const expensesEl = document.getElementById("totalExpenses");
   const balanceEl = document.getElementById("availableBalance");
 
-  if (incomeEl) incomeEl.textContent = formatCurrency(totalIncome);
-  if (debtsEl) debtsEl.textContent = formatCurrency(totalDebts);
-  if (billsEl) billsEl.textContent = formatCurrency(totalBills);
-  if (balanceEl) balanceEl.textContent = formatCurrency(balance);
+  const incomeTrendEl = document.getElementById("incomeTrend");
+  const debtTrendEl = document.getElementById("debtTrend");
+  const expenseTrendEl = document.getElementById("expenseTrend");
+  const balanceTrendEl = document.getElementById("balanceTrend");
 
+  // === FUNÇÃO DE TENDÊNCIA ===
+  function calcTrend(current, previous) {
+    if (previous === 0) {
+      if (current === 0) return { value: 0, text: "0%" };
+      return { value: 100, text: "+100%" };
+    }
+
+    const diff = ((current - previous) / previous) * 100;
+    const sign = diff >= 0 ? "+" : "";
+
+    return {
+      value: diff,
+      text: `${sign}${diff.toFixed(1).replace(".0", "")}%`,
+    };
+  }
+
+  // === RENDA ===
+  if (incomeEl) {
+    incomeEl.textContent = formatCurrency(totalIncome);
+  }
+
+  if (incomeTrendEl) {
+    const trend = calcTrend(totalIncome, prevTotalIncome);
+    incomeTrendEl.textContent = trend.text;
+    incomeTrendEl.className = `metric-trend ${
+      trend.value >= 0 ? "trend-up" : "trend-down"
+    }`;
+  }
+
+  // === DÍVIDAS ===
+  if (debtsEl) {
+    debtsEl.textContent = formatCurrency(totalDebtInstallments);
+    debtsEl.style.color = "var(--accent-purple)";
+  }
+
+  if (debtTrendEl) {
+    const trend = calcTrend(totalDebtInstallments, prevTotalDebtInstallments);
+
+    debtTrendEl.textContent = trend.text;
+
+    debtTrendEl.className = `metric-trend ${
+      trend.value > 0 ? "trend-down" : "trend-up"
+    }`;
+
+    debtTrendEl.style.color = "var(--accent-purple)";
+    debtTrendEl.style.background = "rgba(139, 92, 246, 0.1)";
+  }
+
+  // === CONTAS ===
+  if (billsEl) {
+    billsEl.textContent = formatCurrency(totalBills);
+  }
+
+  if (expenseTrendEl) {
+    const trend = calcTrend(totalBills, prevTotalBills);
+
+    expenseTrendEl.textContent = trend.text;
+
+    expenseTrendEl.className = `metric-trend ${
+      trend.value >= 0 ? "trend-up" : "trend-down"
+    }`;
+  }
+
+  // === DESPESAS ===
+  if (expensesEl) {
+    expensesEl.textContent = formatCurrency(totalExpenses);
+    expensesEl.style.color = "var(--accent-rose)";
+  }
+
+  // === SALDO ===
+  if (balanceEl) {
+    balanceEl.textContent = formatCurrency(balance);
+
+    if (balance < 0) {
+      balanceEl.style.color = "var(--accent-rose)";
+    } else {
+      balanceEl.style.color = "var(--accent-emerald)";
+    }
+  }
+
+  if (balanceTrendEl) {
+    const trend = calcTrend(balance, prevBalance);
+
+    balanceTrendEl.textContent = trend.text;
+
+    balanceTrendEl.className = `metric-trend ${
+      trend.value >= 0 ? "trend-up" : "trend-down"
+    }`;
+  }
+
+  // === OUTRAS FUNÇÕES ===
+  showDebtSummary(debtsPaidThisMonth);
+  checkMissingRecurringBills();
   updateAlerts(monthData.bills || [], userData.debts || []);
-  updateMainChart(totalIncome, totalBills, totalDebts, balance);
+  updateMainChart(totalIncome, totalBills, totalDebtInstallments, balance);
+}
+
+function showDebtSummary(payments) {
+  const container = document.getElementById("debtSummary");
+  if (!container) return;
+
+  if (payments.length === 0) {
+    container.innerHTML = "";
+    return;
+  }
+
+  const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0);
+  container.innerHTML = `
+    <div style="background: rgba(16, 185, 129, 0.1); border-left: 4px solid var(--accent-emerald); padding: 1rem; border-radius: 8px; margin-bottom: 1rem;">
+      <h4 style="margin: 0 0 0.5rem 0; color: var(--accent-emerald);">💳 Dívidas pagas este mês</h4>
+      <p style="margin: 0; font-size: 0.9rem; color: var(--text-secondary);">
+        ${payments.length} pagamento(s) • Total: <strong>${formatCurrency(totalPaid)}</strong>
+      </p>
+      <p style="margin: 0.25rem 0 0 0; font-size: 0.8rem; color: var(--text-muted);">
+        ${payments.map((p) => p.debtDescription).join(", ")}
+      </p>
+    </div>
+  `;
 }
 
 function updateAlerts(bills, debts) {
@@ -1785,6 +2881,8 @@ async function clearAllData() {
     familyMembers: [],
     finances: {},
     debts: [],
+    recurringBillTemplates: [],
+    debtPaymentHistory: [],
   };
 
   await saveUserData(currentUserData);
@@ -1921,6 +3019,9 @@ window.editFamilyMember = editFamilyMember;
 window.deleteFamilyMember = deleteFamilyMember;
 window.editDebt = editDebt;
 window.deleteDebt = deleteDebt;
+window.payDebtInstallment = payDebtInstallment;
+window.showDebtHistory = showDebtHistory;
+window.closeDebtHistoryModal = closeDebtHistoryModal;
 window.editIncome = editIncome;
 window.deleteIncome = deleteIncome;
 window.toggleBillStatus = toggleBillStatus;
@@ -1935,6 +3036,10 @@ window.clearAllData = clearAllData;
 window.exportData = exportData;
 window.importData = importData;
 window.generateFullReport = generateFullReport;
-window.closeModal = function () {
-  document.getElementById("editModal")?.classList.remove("active");
-};
+window.createRecurringBillTemplate = createRecurringBillTemplate;
+window.useTemplateForCurrentMonth = useTemplateForCurrentMonth;
+window.editTemplate = editTemplate;
+window.deleteTemplate = deleteTemplate;
+window.showRecurringSuggestions = showRecurringSuggestions;
+window.saveEdit = saveEdit;
+window.closeModal = closeModal;

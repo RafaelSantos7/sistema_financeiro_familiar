@@ -121,6 +121,7 @@
               <div class="metric-value" id="totalIncome">R$ 0,00</div>
               <div class="metric-label">Renda Total do Mês</div>
             </div>
+
             <div class="metric-card debt">
               <div class="metric-header">
                 <div class="metric-icon">💳</div>
@@ -129,6 +130,7 @@
               <div class="metric-value" id="totalDebts">R$ 0,00</div>
               <div class="metric-label">Total de Dívidas</div>
             </div>
+
             <div class="metric-card expense">
               <div class="metric-header">
                 <div class="metric-icon">📄</div>
@@ -137,6 +139,16 @@
               <div class="metric-value" id="totalBills">R$ 0,00</div>
               <div class="metric-label">Contas do Mês</div>
             </div>
+
+            <div class="metric-card total-expenses">
+              <div class="metric-header">
+                <div class="metric-icon">💸</div>
+                <span class="metric-trend trend-down">+0%</span>
+              </div>
+              <div class="metric-value" id="totalExpenses">R$ 0,00</div>
+              <div class="metric-label">Despesas Totais do Mês</div>
+            </div>
+
             <div class="metric-card balance">
               <div class="metric-header">
                 <div class="metric-icon">💎</div>
@@ -146,6 +158,9 @@
               <div class="metric-label">Saldo Disponível</div>
             </div>
           </div>
+
+          <div id="recurringSuggestions" style="margin-bottom: 1rem"></div>
+          <div id="debtSummary" style="margin-bottom: 1rem"></div>
 
           <div class="charts-grid">
             <div class="chart-card">
@@ -364,9 +379,10 @@
             </form>
           </div>
 
+          <!-- Dívidas Ativas -->
           <div class="table-container">
             <div class="table-header">
-              <h3>📋 Dívidas Cadastradas</h3>
+              <h3>📋 Dívidas Ativas</h3>
               <span class="record-count" id="debtCount">0 registros</span>
             </div>
             <div class="table-responsive">
@@ -380,12 +396,13 @@
                     <th>Progresso</th>
                     <th>Vencimento</th>
                     <th>Saldo Devedor</th>
+                    <th>Pagamento</th>
                     <th>Ações</th>
                   </tr>
                 </thead>
                 <tbody id="debtTableBody">
                   <tr class="empty-row">
-                    <td colspan="8">
+                    <td colspan="9">
                       <div class="empty-state small">
                         <div class="empty-state-icon">💳</div>
                         <h4>Nenhuma dívida cadastrada</h4>
@@ -633,14 +650,14 @@
             </div>
           </div>
 
-          <div class="form-actions">
+          <!-- <div class="form-actions">
             <button class="btn btn-primary" onclick="generateFullReport()">
               <span>📄</span> Gerar Relatório Completo
             </button>
             <button class="btn btn-secondary" onclick="window.print()">
               <span>🖨️</span> Imprimir
             </button>
-          </div>
+          </div> -->
         </section>
 
         <!-- Histórico Section -->
@@ -677,6 +694,87 @@
 
         <!-- Configurações Section -->
         <section id="configuracoes" class="content-section">
+          <div
+            class="form-card"
+            style="margin-bottom: 2rem; border: 2px solid var(--accent-gold)"
+          >
+            <div class="form-header">
+              <span class="header-icon" style="font-size: 2rem">📋</span>
+              <div>
+                <h3>Contas Recorrentes (Templates)</h3>
+                <p class="form-subtitle">
+                  Crie templates para contas que se repetem todo mês (luz, água,
+                  internet). Os valores podem ser diferentes a cada mês!
+                </p>
+              </div>
+            </div>
+
+            <form
+              id="templateForm"
+              onsubmit="createRecurringBillTemplate(event)"
+            >
+              <div class="form-grid">
+                <div class="form-group">
+                  <label>Descrição (ex: Conta de Luz) *</label>
+                  <input
+                    type="text"
+                    id="templateDescription"
+                    required
+                    placeholder="Nome da conta"
+                  />
+                </div>
+                <div class="form-group">
+                  <label>Categoria *</label>
+                  <select id="templateCategory" required>
+                    <option value="Moradia">Moradia</option>
+                    <option value="Utilidades">Utilidades</option>
+                    <option value="Internet">Internet/TV</option>
+                    <option value="Telefone">Telefone</option>
+                    <option value="Outro">Outro</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>Valor Sugerido (opcional)</label>
+                  <input
+                    type="number"
+                    id="templateDefaultAmount"
+                    step="0.01"
+                    placeholder="0,00"
+                  />
+                </div>
+                <div class="form-group">
+                  <label>Dia de Vencimento *</label>
+                  <input
+                    type="number"
+                    id="templateDueDay"
+                    min="1"
+                    max="31"
+                    value="10"
+                    required
+                  />
+                </div>
+              </div>
+              <div class="form-group" style="margin-top: 1rem">
+                <label>Observações (opcional)</label>
+                <input
+                  type="text"
+                  id="templateNotes"
+                  placeholder="Ex: Código de barras, site para pagamento..."
+                />
+              </div>
+              <div class="form-actions" style="margin-top: 1rem">
+                <button type="submit" class="btn btn-primary">
+                  <span>➕</span> Criar Contas Recorrentes
+                </button>
+              </div>
+            </form>
+
+            <div id="recurringTemplatesList" style="margin-top: 1.5rem">
+              <!-- Templates serão listados aqui -->
+            </div>
+          </div>
+
+          <!-- Danger card -->
           <div class="form-card danger-card">
             <div class="form-header">
               <span class="header-icon">⚠️</span>
