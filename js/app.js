@@ -1,79 +1,113 @@
-// CONFIGURAÇÃO E ESTADO GLOBAL
 // ==========================================
+// CONFIGURAÇÃO FIREBASE
+// ==========================================
+import {
+  auth,
+  db,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  signOut,
+  onAuthStateChanged,
+  sendPasswordResetEmail,
+  doc,
+  setDoc,
+  getDoc,
+  updateDoc,
+  collection,
+  query,
+  where,
+  getDocs,
+  updateProfile,
+} from "./firebase-config.js";
 
-const STORAGE_KEYS = {
-  USERS: "financas_users",
-  CURRENT_USER: "financas_current_user",
-  PASSWORD_RESET: "financas_password_reset",
-  FINANCES: "financas_finances",
-};
-
+// Estado global
 let currentUser = null;
+let currentUserData = null;
 let currentMonth = new Date().toISOString().slice(0, 7);
 let formSubmitLock = false;
 
 // ==========================================
 // INICIALIZAÇÃO PRINCIPAL
+// ==========================================
 
 document.addEventListener("DOMContentLoaded", function () {
   console.log("=== DOM CARREGADO ===");
 
-  const path = window.location.pathname;
-  const page = path.split("/").pop() || "index.html";
-  console.log("Página:", page);
+  // Verificar estado de autenticação em TODOS os navegadores
+  onAuthStateChanged(auth, async (user) => {
+    if (user) {
+      // Usuário logado no Firebase!
+      currentUser = {
+        id: user.uid,
+        email: user.email,
+        name: user.displayName || user.email.split("@")[0],
+      };
+
+      // Carregar dados do Firestore
+      await loadUserDataFromCloud();
+
+      const path = window.location.pathname;
+      const page = path.split("/").pop() || "index.html";
+
+      if (page === "index.html" || page === "" || page === "login.html") {
+        window.location.href = "financas.html";
+      } else if (page === "financas.html" || page === "dashboard.html") {
+        initAppPage();
+      }
+    } else {
+      // Não logado
+      currentUser = null;
+      const path = window.location.pathname;
+      const page = path.split("/").pop() || "index.html";
+
+      if (page === "financas.html" || page === "dashboard.html") {
+        window.location.href = "index.html";
+      } else if (
+        page === "index.html" ||
+        page === "" ||
+        page === "login.html"
+      ) {
+        initLoginPage();
+      }
+    }
+  });
 
   // Verificar token de redefinição de senha
   const urlParams = new URLSearchParams(window.location.search);
   const resetToken = urlParams.get("reset");
-
-  if (resetToken && (page === "index.html" || page === "")) {
-    showPasswordResetForm(resetToken);
-    return;
-  }
-
-  if (page === "index.html" || page === "" || page === "login.html") {
-    initLoginPage();
-  } else if (page === "financas.html" || page === "dashboard.html") {
-    initAppPage();
+  if (resetToken) {
+    // Firebase lida com reset de senha via email, não precisa disso
+    showNotification(
+      "Use o link enviado por email para redefinir senha.",
+      "info",
+    );
   }
 });
 
 // ==========================================
-// PÁGINA DE LOGIN (index.html)
+// PÁGINA DE LOGIN
+// ==========================================
 
 function initLoginPage() {
   console.log("Inicializando login...");
 
-  // Verificar se já está logado
-  const savedUser = localStorage.getItem(STORAGE_KEYS.CURRENT_USER);
-  if (savedUser) {
-    window.location.href = "financas.html";
-    return;
-  }
-
-  // Configurar tabs
+  // Tabs
   const loginTab = document.querySelector('.auth-tab[data-tab="login"]');
   const registerTab = document.querySelector('.auth-tab[data-tab="register"]');
 
-  if (loginTab) {
+  if (loginTab)
     loginTab.addEventListener("click", () => switchAuthTab("login"));
-  }
-  if (registerTab) {
+  if (registerTab)
     registerTab.addEventListener("click", () => switchAuthTab("register"));
-  }
 
-  // Configurar formulários
+  // Forms
   const loginForm = document.getElementById("loginForm");
   const registerForm = document.getElementById("registerForm");
 
-  if (loginForm) {
-    loginForm.addEventListener("submit", handleLogin);
-  }
-  if (registerForm) {
-    registerForm.addEventListener("submit", handleRegister);
-  }
+  if (loginForm) loginForm.addEventListener("submit", handleLogin);
+  if (registerForm) registerForm.addEventListener("submit", handleRegister);
 
-  // Link esqueci senha
+  // Esqueci senha
   const forgotLink = document.getElementById("forgotPasswordLink");
   if (forgotLink) {
     forgotLink.addEventListener("click", function (e) {
@@ -84,20 +118,16 @@ function initLoginPage() {
 }
 
 function switchAuthTab(tab) {
-  console.log("Switch tab:", tab);
-
   const loginForm = document.getElementById("loginForm");
   const registerForm = document.getElementById("registerForm");
   const loginTab = document.querySelector('.auth-tab[data-tab="login"]');
   const registerTab = document.querySelector('.auth-tab[data-tab="register"]');
 
-  // Esconder todos
   if (loginForm) loginForm.classList.remove("active");
   if (registerForm) registerForm.classList.remove("active");
   if (loginTab) loginTab.classList.remove("active");
   if (registerTab) registerTab.classList.remove("active");
 
-  // Mostrar o correto
   if (tab === "login") {
     if (loginForm) loginForm.classList.add("active");
     if (loginTab) loginTab.classList.add("active");
@@ -107,9 +137,10 @@ function switchAuthTab(tab) {
   }
 }
 
-function handleLogin(e) {
+// LOGIN COM FIREBASE
+async function handleLogin(e) {
   e.preventDefault();
-  console.log("Fazendo login...");
+  console.log("Fazendo login no Firebase...");
 
   const email = document.getElementById("loginEmail")?.value.trim();
   const password = document.getElementById("loginPassword")?.value;
@@ -119,23 +150,30 @@ function handleLogin(e) {
     return;
   }
 
-  const users = JSON.parse(localStorage.getItem(STORAGE_KEYS.USERS) || "[]");
-  const user = users.find((u) => u.email === email && u.password === password);
+  try {
+    const userCredential = await signInWithEmailAndPassword(
+      auth,
+      email,
+      password,
+    );
+    const user = userCredential.user;
 
-  if (user) {
-    localStorage.setItem(STORAGE_KEYS.CURRENT_USER, JSON.stringify(user));
     showNotification("Login realizado!", "success");
-    setTimeout(() => {
-      window.location.href = "financas.html";
-    }, 500);
-  } else {
-    showNotification("Email ou senha incorretos!", "error");
+    // onAuthStateChanged vai redirecionar automaticamente
+  } catch (error) {
+    console.error("Erro login:", error);
+    let msg = "Email ou senha incorretos!";
+    if (error.code === "auth/user-not-found") msg = "Usuário não encontrado!";
+    if (error.code === "auth/wrong-password") msg = "Senha incorreta!";
+    if (error.code === "auth/invalid-email") msg = "Email inválido!";
+    showNotification(msg, "error");
   }
 }
 
-function handleRegister(e) {
+// REGISTRO COM FIREBASE
+async function handleRegister(e) {
   e.preventDefault();
-  console.log("Registrando...");
+  console.log("Registrando no Firebase...");
 
   if (formSubmitLock) return;
   formSubmitLock = true;
@@ -165,59 +203,103 @@ function handleRegister(e) {
     return;
   }
 
-  const users = JSON.parse(localStorage.getItem(STORAGE_KEYS.USERS) || "[]");
+  try {
+    // Criar usuário no Firebase Auth
+    // Criar usuário no Firebase Auth
+    const userCredential = await createUserWithEmailAndPassword(
+      auth,
+      email,
+      password,
+    );
 
-  if (users.find((u) => u.email === email)) {
-    showNotification("Email já cadastrado!", "error");
+    const user = userCredential.user;
+
+    // ✅ salvar nome no Firebase Auth
+    await updateProfile(user, {
+      displayName: name,
+    });
+
+    // Criar documento no Firestore com dados iniciais
+    const userData = {
+      name: name,
+      email: email,
+      createdAt: new Date().toISOString(),
+      familyMembers: [],
+      finances: {},
+      debts: [],
+    };
+
+    await setDoc(doc(db, "users", user.uid), userData);
+
+    showNotification("Conta criada!", "success");
+    // onAuthStateChanged vai redirecionar
+  } catch (error) {
+    console.error("Erro registro:", error);
+    let msg = "Erro ao criar conta!";
+    if (error.code === "auth/email-already-in-use")
+      msg = "Email já cadastrado!";
+    if (error.code === "auth/invalid-email") msg = "Email inválido!";
+    if (error.code === "auth/weak-password") msg = "Senha muito fraca!";
+    showNotification(msg, "error");
     formSubmitLock = false;
-    return;
   }
-
-  const newUser = {
-    id: Date.now().toString(),
-    name,
-    email,
-    password,
-    createdAt: new Date().toISOString(),
-  };
-
-  users.push(newUser);
-  localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(users));
-  localStorage.setItem(STORAGE_KEYS.CURRENT_USER, JSON.stringify(newUser));
-
-  // Inicializar dados
-  initializeUserData(newUser.id);
-
-  showNotification("Conta criada!", "success");
-  setTimeout(() => {
-    window.location.href = "financas.html";
-  }, 1000);
 }
 
-function initializeUserData(userId) {
-  const userData = {
-    familyMembers: [],
-    finances: {},
-    debts: [],
-  };
-  localStorage.setItem(
-    `${STORAGE_KEYS.FINANCES}_${userId}`,
-    JSON.stringify(userData),
-  );
+// CARREGAR DADOS DA NUVEM
+async function loadUserDataFromCloud() {
+  if (!currentUser) return;
+
+  try {
+    const docRef = doc(db, "users", currentUser.id);
+    const docSnap = await getDoc(docRef);
+
+    if (docSnap.exists()) {
+      currentUserData = docSnap.data();
+      // Garantir estrutura mínima
+      if (!currentUserData.familyMembers) currentUserData.familyMembers = [];
+      if (!currentUserData.finances) currentUserData.finances = {};
+      if (!currentUserData.debts) currentUserData.debts = [];
+    } else {
+      // Criar estrutura inicial se não existir
+      currentUserData = {
+        familyMembers: [],
+        finances: {},
+        debts: [],
+      };
+    }
+  } catch (error) {
+    console.error("Erro ao carregar dados:", error);
+    showNotification("Erro ao carregar dados da nuvem!", "error");
+  }
+}
+
+// SALVAR DADOS NA NUVEM
+async function saveUserDataToCloud() {
+  if (!currentUser || !currentUserData) return;
+
+  try {
+    await setDoc(doc(db, "users", currentUser.id), currentUserData, {
+      merge: true,
+    });
+
+    console.log("Dados salvos na nuvem!");
+  } catch (error) {
+    console.error("Erro ao salvar:", error);
+    showNotification("Erro ao salvar dados!", "error");
+  }
 }
 
 // ==========================================
-// RECUPERAÇÃO DE SENHA
+// RECUPERAÇÃO DE SENHA (FIREBASE)
+// ==========================================
 
 function showForgotPasswordForm() {
   const container = document.querySelector(".auth-card");
   if (!container) return;
 
-  // Esconder formulários existentes
   const existingForms = container.querySelectorAll(".auth-form");
   existingForms.forEach((f) => (f.style.display = "none"));
 
-  // Criar formulário de recuperação
   const forgotForm = document.createElement("form");
   forgotForm.id = "forgotForm";
   forgotForm.className = "auth-form active";
@@ -240,12 +322,7 @@ function showForgotPasswordForm() {
   forgotForm.addEventListener("submit", handleForgotPassword);
 }
 
-function backToLogin(e) {
-  if (e) e.preventDefault();
-  location.reload();
-}
-
-function handleForgotPassword(e) {
+async function handleForgotPassword(e) {
   e.preventDefault();
 
   const email = document.getElementById("forgotEmail")?.value.trim();
@@ -254,152 +331,43 @@ function handleForgotPassword(e) {
     return;
   }
 
-  const users = JSON.parse(localStorage.getItem(STORAGE_KEYS.USERS) || "[]");
-  const user = users.find((u) => u.email === email);
-
-  if (!user) {
+  try {
+    await sendPasswordResetEmail(auth, email);
+    showNotification("Link de recuperação enviado para seu email!", "success");
+    setTimeout(backToLogin, 3000);
+  } catch (error) {
+    console.error("Erro:", error);
+    // Por segurança, não revelamos se email existe ou não
     showNotification(
       "Se este email existir, você receberá instruções.",
       "info",
     );
     setTimeout(backToLogin, 3000);
-    return;
   }
-
-  // Gerar token
-  const token =
-    Math.random().toString(36).substring(2, 15) +
-    Math.random().toString(36).substring(2, 15);
-  const resetData = {
-    token,
-    userId: user.id,
-    email: user.email,
-    expires: Date.now() + 24 * 60 * 60 * 1000,
-    used: false,
-  };
-
-  const resets = JSON.parse(
-    localStorage.getItem(STORAGE_KEYS.PASSWORD_RESET) || "[]",
-  );
-  resets.push(resetData);
-  localStorage.setItem(STORAGE_KEYS.PASSWORD_RESET, JSON.stringify(resets));
-
-  // Mostrar link (simulação)
-  const forgotForm = document.getElementById("forgotForm");
-  if (forgotForm) {
-    const linkDiv = document.createElement("div");
-    linkDiv.style.cssText =
-      "margin-top: 1rem; padding: 1rem; background: var(--bg-card); border-radius: 8px; word-break: break-all;";
-    linkDiv.innerHTML = `
-      <p style="color: var(--accent-gold); font-size: 0.85rem; margin-bottom: 0.5rem;">
-        Link de recuperação (modo teste):
-      </p>
-      <a href="?reset=${token}" style="color: var(--accent-blue); font-size: 0.8rem;">
-        ${window.location.origin}${window.location.pathname}?reset=${token}
-      </a>
-    `;
-    forgotForm.appendChild(linkDiv);
-  }
-
-  showNotification("Link gerado! Verifique acima.", "success");
 }
 
-function showPasswordResetForm(token) {
-  const resets = JSON.parse(
-    localStorage.getItem(STORAGE_KEYS.PASSWORD_RESET) || "[]",
-  );
-  const resetData = resets.find(
-    (r) => r.token === token && !r.used && r.expires > Date.now(),
-  );
-
-  if (!resetData) {
-    showNotification("Link inválido ou expirado!", "error");
-    setTimeout(() => {
-      window.location.href = "index.html";
-    }, 2000);
-    return;
-  }
-
-  const container = document.querySelector(".auth-container");
-  if (container) {
-    container.innerHTML = `
-      <div class="auth-card">
-        <div class="auth-logo">
-          <div class="logo-icon-large">🔐</div>
-          <h1>Nova Senha</h1>
-        </div>
-        <form id="resetForm" class="auth-form active">
-          <div class="form-group">
-            <label>Nova Senha</label>
-            <input type="password" id="newPassword" placeholder="Mínimo 6 caracteres" minlength="6" required />
-          </div>
-          <div class="form-group">
-            <label>Confirmar Nova Senha</label>
-            <input type="password" id="confirmNewPassword" placeholder="••••••••" required />
-          </div>
-          <button type="submit" class="btn btn-primary btn-full">Redefinir Senha</button>
-        </form>
-      </div>
-    `;
-
-    document
-      .getElementById("resetForm")
-      .addEventListener("submit", function (e) {
-        e.preventDefault();
-
-        const newPass = document.getElementById("newPassword").value;
-        const confirmPass = document.getElementById("confirmNewPassword").value;
-
-        if (newPass !== confirmPass) {
-          showNotification("As senhas não coincidem!", "error");
-          return;
-        }
-
-        const users = JSON.parse(
-          localStorage.getItem(STORAGE_KEYS.USERS) || "[]",
-        );
-        const userIndex = users.findIndex((u) => u.id === resetData.userId);
-
-        if (userIndex >= 0) {
-          users[userIndex].password = newPass;
-          localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(users));
-
-          resetData.used = true;
-          localStorage.setItem(
-            STORAGE_KEYS.PASSWORD_RESET,
-            JSON.stringify(resets),
-          );
-
-          showNotification("Senha alterada!", "success");
-          setTimeout(() => {
-            window.location.href = "index.html";
-          }, 1500);
-        }
-      });
-  }
+function backToLogin(e) {
+  if (e) e.preventDefault();
+  location.reload();
 }
 
 // ==========================================
-// PÁGINA DO APP (financas.html)
+// PÁGINA DO APP (adaptada para Firebase)
+// ==========================================
 
 function initAppPage() {
   console.log("=== INICIANDO APP ===");
 
-  // Verificar login
-  const savedUser = localStorage.getItem(STORAGE_KEYS.CURRENT_USER);
-  if (!savedUser) {
-    console.log("Sem usuário, redirecionando...");
+  if (!currentUser) {
     window.location.href = "index.html";
     return;
   }
 
-  currentUser = JSON.parse(savedUser);
-  console.log("Usuário:", currentUser);
-
-  // Atualizar info do usuário na sidebar
+  // Atualizar info do usuário
   const userNameEl = document.getElementById("userName");
   const userEmailEl = document.getElementById("userEmail");
-  if (userNameEl) userNameEl.textContent = currentUser.name;
+  if (userNameEl)
+    userNameEl.textContent = currentUserData?.name || currentUser.name;
   if (userEmailEl) userEmailEl.textContent = currentUser.email;
 
   // Configurar mês
@@ -420,10 +388,10 @@ function initAppPage() {
   // Configurar formulários
   setupForms();
 
-  // Carregar dados
+  // Carregar dados (já carregados do Firebase, só renderizar)
   loadAllData();
 
-  // Mostrar dashboard por padrão
+  // Mostrar dashboard
   showSection("dashboard");
 
   console.log("=== APP PRONTO ===");
@@ -446,8 +414,6 @@ function setupForms() {
       form.parentNode.replaceChild(newForm, form);
       newForm.addEventListener("submit", handler);
       console.log(`✓ Formulário ${id} configurado`);
-    } else {
-      console.warn(`✗ Formulário ${id} não encontrado`);
     }
   });
 }
@@ -464,11 +430,11 @@ function loadAllData() {
 
 // ==========================================
 // NAVEGAÇÃO
+// ==========================================
 
 function showSection(sectionId) {
   console.log("Mostrando seção:", sectionId);
 
-  // Atualizar navegação
   document.querySelectorAll(".nav-item").forEach((item) => {
     item.classList.remove("active");
     const onclickAttr = item.getAttribute("onclick") || "";
@@ -477,17 +443,13 @@ function showSection(sectionId) {
     }
   });
 
-  // Mostrar seção
   document.querySelectorAll(".content-section").forEach((section) => {
     section.classList.remove("active");
   });
 
   const target = document.getElementById(sectionId);
-  if (target) {
-    target.classList.add("active");
-  }
+  if (target) target.classList.add("active");
 
-  // Atualizar título
   const titles = {
     dashboard: {
       title: "Dashboard",
@@ -512,22 +474,25 @@ function showSection(sectionId) {
     if (subtitleEl) subtitleEl.textContent = titles[sectionId].subtitle;
   }
 
-  // Fechar menu mobile
   const sidebar = document.getElementById("sidebar");
   const overlay = document.querySelector(".sidebar-overlay");
   if (sidebar) sidebar.classList.remove("active");
   if (overlay) overlay.classList.remove("active");
 
-  // Recarregar dados específicos
   if (sectionId === "dashboard") updateDashboard();
   if (sectionId === "relatorios") updateReports();
   if (sectionId === "historico") loadFinancialEvolution();
 }
 
-function logout() {
-  localStorage.removeItem(STORAGE_KEYS.CURRENT_USER);
-  currentUser = null;
-  window.location.href = "index.html";
+async function logout() {
+  try {
+    await signOut(auth);
+    currentUser = null;
+    currentUserData = null;
+    window.location.href = "index.html";
+  } catch (error) {
+    console.error("Erro logout:", error);
+  }
 }
 
 function changeMonth() {
@@ -540,42 +505,19 @@ function changeMonth() {
 }
 
 // ==========================================
-// GERENCIAMENTO DE DADOS
+// GERENCIAMENTO DE DADOS (Firestore)
 // ==========================================
 
 function getUserData() {
-  if (!currentUser) {
-    console.error("Sem usuário logado!");
+  if (!currentUserData) {
     return { familyMembers: [], finances: {}, debts: [] };
   }
-
-  const key = `${STORAGE_KEYS.FINANCES}_${currentUser.id}`;
-  const data = localStorage.getItem(key);
-
-  if (!data) {
-    return { familyMembers: [], finances: {}, debts: [] };
-  }
-
-  try {
-    const parsed = JSON.parse(data);
-    // Garantir que debts sempre exista
-    if (!parsed.debts) parsed.debts = [];
-    return parsed;
-  } catch (e) {
-    console.error("Erro ao parsear dados:", e);
-    return { familyMembers: [], finances: {}, debts: [] };
-  }
+  return currentUserData;
 }
 
-function saveUserData(data) {
-  if (!currentUser) {
-    console.error("Sem usuário logado!");
-    return;
-  }
-
-  const key = `${STORAGE_KEYS.FINANCES}_${currentUser.id}`;
-  localStorage.setItem(key, JSON.stringify(data));
-  console.log("Dados salvos!");
+async function saveUserData(data) {
+  currentUserData = data;
+  await saveUserDataToCloud();
 }
 
 function getMonthData(month = currentMonth) {
@@ -587,10 +529,10 @@ function getMonthData(month = currentMonth) {
   return userData.finances[month];
 }
 
-function saveMonthData(month, data) {
+async function saveMonthData(month, data) {
   const userData = getUserData();
   userData.finances[month] = data;
-  saveUserData(userData);
+  await saveUserData(userData);
 }
 
 // ==========================================
@@ -667,26 +609,19 @@ function updateFamilyTotal(members) {
     0,
   );
   const totalEl = document.getElementById("familyTotalIncome");
-  if (totalEl) {
-    totalEl.textContent = formatCurrency(total);
-  }
+  if (totalEl) totalEl.textContent = formatCurrency(total);
 }
 
-function addFamilyMember(e) {
+async function addFamilyMember(e) {
   e.preventDefault();
   console.log("=== ADICIONANDO MEMBRO ===");
 
-  if (formSubmitLock) {
-    console.log("Bloqueado");
-    return;
-  }
+  if (formSubmitLock) return;
   formSubmitLock = true;
 
   const nameInput = document.getElementById("memberName");
   const salaryInput = document.getElementById("memberSalary");
   const typeInput = document.getElementById("memberType");
-
-  console.log("Inputs:", { nameInput, salaryInput, typeInput });
 
   if (!nameInput || !salaryInput) {
     showNotification("Erro: campos não encontrados!", "error");
@@ -697,8 +632,6 @@ function addFamilyMember(e) {
   const name = nameInput.value.trim();
   const salary = parseFloat(salaryInput.value) || 0;
   const type = typeInput ? typeInput.value : "salario";
-
-  console.log("Dados:", { name, salary, type });
 
   if (!name) {
     showNotification("Digite o nome!", "error");
@@ -727,9 +660,7 @@ function addFamilyMember(e) {
   };
 
   userData.familyMembers.push(member);
-  saveUserData(userData);
-
-  console.log("Membro salvo:", member);
+  await saveUserData(userData);
 
   e.target.reset();
   loadFamilyMembers();
@@ -741,7 +672,7 @@ function addFamilyMember(e) {
   }, 1000);
 }
 
-function editFamilyMember(id) {
+async function editFamilyMember(id) {
   const userData = getUserData();
   const member = userData.familyMembers.find((m) => m.id === id);
   if (!member) return;
@@ -755,18 +686,18 @@ function editFamilyMember(id) {
   member.name = newName.trim() || member.name;
   member.defaultSalary = parseFloat(newSalary) || member.defaultSalary;
 
-  saveUserData(userData);
+  await saveUserData(userData);
   loadFamilyMembers();
   updateDashboard();
   showNotification("Membro atualizado!", "success");
 }
 
-function deleteFamilyMember(id) {
+async function deleteFamilyMember(id) {
   if (!confirm("Excluir este membro?")) return;
 
   const userData = getUserData();
   userData.familyMembers = userData.familyMembers.filter((m) => m.id !== id);
-  saveUserData(userData);
+  await saveUserData(userData);
 
   loadFamilyMembers();
   updateDashboard();
@@ -775,8 +706,9 @@ function deleteFamilyMember(id) {
 
 // ==========================================
 // DÍVIDAS
+// ==========================================
 
-function addDebt(e) {
+async function addDebt(e) {
   e.preventDefault();
 
   if (formSubmitLock) return;
@@ -813,7 +745,7 @@ function addDebt(e) {
     createdAt: new Date().toISOString(),
   });
 
-  saveUserData(userData);
+  await saveUserData(userData);
 
   e.target.reset();
   const paidInput = document.getElementById("debtPaid");
@@ -887,7 +819,7 @@ function loadDebts() {
   }
 }
 
-function editDebt(id) {
+async function editDebt(id) {
   const userData = getUserData();
   const debt = userData.debts.find((d) => d.id === id);
   if (!debt) return;
@@ -896,18 +828,18 @@ function editDebt(id) {
   if (newPaid === null) return;
 
   debt.paid = parseInt(newPaid) || debt.paid;
-  saveUserData(userData);
+  await saveUserData(userData);
   loadDebts();
   updateDashboard();
   showNotification("Dívida atualizada!", "success");
 }
 
-function deleteDebt(id) {
+async function deleteDebt(id) {
   if (!confirm("Excluir esta dívida?")) return;
 
   const userData = getUserData();
   userData.debts = userData.debts.filter((d) => d.id !== id);
-  saveUserData(userData);
+  await saveUserData(userData);
 
   loadDebts();
   updateDashboard();
@@ -916,8 +848,9 @@ function deleteDebt(id) {
 
 // ==========================================
 // RECEBIMENTOS (RENDA EXTRA)
+// ==========================================
 
-function addIncome(e) {
+async function addIncome(e) {
   e.preventDefault();
 
   if (formSubmitLock) return;
@@ -952,7 +885,7 @@ function addIncome(e) {
     createdAt: new Date().toISOString(),
   });
 
-  saveMonthData(currentMonth, monthData);
+  await saveMonthData(currentMonth, monthData);
 
   e.target.reset();
   const dateInput = document.getElementById("incomeDate");
@@ -1012,7 +945,7 @@ function loadIncomes() {
   }
 }
 
-function editIncome(id) {
+async function editIncome(id) {
   const monthData = getMonthData();
   const income = monthData.incomes.find((i) => i.id === id);
   if (!income) return;
@@ -1021,18 +954,18 @@ function editIncome(id) {
   if (newAmount === null) return;
 
   income.amount = parseFloat(newAmount) || income.amount;
-  saveMonthData(currentMonth, monthData);
+  await saveMonthData(currentMonth, monthData);
   loadIncomes();
   updateDashboard();
   showNotification("Recebimento atualizado!", "success");
 }
 
-function deleteIncome(id) {
+async function deleteIncome(id) {
   if (!confirm("Excluir este recebimento?")) return;
 
   const monthData = getMonthData();
   monthData.incomes = monthData.incomes.filter((i) => i.id !== id);
-  saveMonthData(currentMonth, monthData);
+  await saveMonthData(currentMonth, monthData);
 
   loadIncomes();
   updateDashboard();
@@ -1041,8 +974,9 @@ function deleteIncome(id) {
 
 // ==========================================
 // CONTAS
+// ==========================================
 
-function addBill(e) {
+async function addBill(e) {
   e.preventDefault();
 
   if (formSubmitLock) return;
@@ -1075,7 +1009,7 @@ function addBill(e) {
     createdAt: new Date().toISOString(),
   });
 
-  saveMonthData(currentMonth, monthData);
+  await saveMonthData(currentMonth, monthData);
 
   e.target.reset();
   const dueInput = document.getElementById("billDueDate");
@@ -1159,19 +1093,19 @@ function loadBills() {
   }
 }
 
-function toggleBillStatus(id) {
+async function toggleBillStatus(id) {
   const monthData = getMonthData();
   const bill = monthData.bills.find((b) => b.id === id);
   if (!bill) return;
 
   bill.status = bill.status === "Pago" ? "Pendente" : "Pago";
-  saveMonthData(currentMonth, monthData);
+  await saveMonthData(currentMonth, monthData);
   loadBills();
   updateDashboard();
   showNotification(`Conta ${bill.status.toLowerCase()}!`, "success");
 }
 
-function editBill(id) {
+async function editBill(id) {
   const monthData = getMonthData();
   const bill = monthData.bills.find((b) => b.id === id);
   if (!bill) return;
@@ -1180,18 +1114,18 @@ function editBill(id) {
   if (newAmount === null) return;
 
   bill.amount = parseFloat(newAmount) || bill.amount;
-  saveMonthData(currentMonth, monthData);
+  await saveMonthData(currentMonth, monthData);
   loadBills();
   updateDashboard();
   showNotification("Conta atualizada!", "success");
 }
 
-function deleteBill(id) {
+async function deleteBill(id) {
   if (!confirm("Excluir esta conta?")) return;
 
   const monthData = getMonthData();
   monthData.bills = monthData.bills.filter((b) => b.id !== id);
-  saveMonthData(currentMonth, monthData);
+  await saveMonthData(currentMonth, monthData);
 
   loadBills();
   updateDashboard();
@@ -1200,42 +1134,32 @@ function deleteBill(id) {
 
 // ==========================================
 // DASHBOARD
+// ==========================================
 
 function updateDashboard() {
   const monthData = getMonthData();
   const userData = getUserData();
 
-  // CORREÇÃO: Somar renda dos membros da família (defaultSalary)
   const familyIncome = (userData.familyMembers || []).reduce(
     (sum, m) => sum + (parseFloat(m.defaultSalary) || 0),
     0,
   );
-
-  // Renda extra do mês (recebimentos)
   const extraIncome = (monthData.incomes || []).reduce(
     (sum, i) => sum + i.amount,
     0,
   );
-
-  // Total de renda (FAMÍLIA + EXTRA)
   const totalIncome = familyIncome + extraIncome;
 
-  // Contas a pagar (apenas pendentes)
   const totalBills = (monthData.bills || []).reduce(
     (sum, b) => sum + (b.status !== "Pago" ? b.amount : 0),
     0,
   );
-
-  // Dívidas (parcelas mensais)
   const totalDebts = (userData.debts || []).reduce(
     (sum, d) => sum + (d.installment || 0),
     0,
   );
-
-  // Saldo disponível
   const balance = totalIncome - totalBills - totalDebts;
 
-  // Atualizar cards
   const incomeEl = document.getElementById("totalIncome");
   const debtsEl = document.getElementById("totalDebts");
   const billsEl = document.getElementById("totalBills");
@@ -1246,7 +1170,6 @@ function updateDashboard() {
   if (billsEl) billsEl.textContent = formatCurrency(totalBills);
   if (balanceEl) balanceEl.textContent = formatCurrency(balance);
 
-  // Atualizar alertas e gráficos
   updateAlerts(monthData.bills || [], userData.debts || []);
   updateMainChart(totalIncome, totalBills, totalDebts, balance);
 }
@@ -1259,7 +1182,6 @@ function updateAlerts(bills, debts) {
   const today = new Date();
   const hoje = today.getDate();
 
-  // Verificar contas pendentes
   (bills || [])
     .filter((b) => b.status !== "Pago")
     .forEach((b) => {
@@ -1302,7 +1224,6 @@ function updateAlerts(bills, debts) {
       }
     });
 
-  // Verificar dívidas (parcelas mensais)
   (debts || []).forEach((d) => {
     const diaVencimento = d.dueDay || 1;
     const diasAteVencimento = diaVencimento - hoje;
@@ -1334,7 +1255,6 @@ function updateAlerts(bills, debts) {
     }
   });
 
-  // Ordenar por urgência
   alerts.sort((a, b) => a.urgencia - b.urgencia);
 
   if (alerts.length === 0) {
@@ -1366,9 +1286,7 @@ function updateMainChart(income, bills, debts, balance) {
   const ctx = document.getElementById("mainChart");
   if (!ctx) return;
 
-  if (window.mainChartInstance) {
-    window.mainChartInstance.destroy();
-  }
+  if (window.mainChartInstance) window.mainChartInstance.destroy();
 
   window.mainChartInstance = new Chart(ctx, {
     type: "doughnut",
@@ -1397,12 +1315,12 @@ function updateMainChart(income, bills, debts, balance) {
 
 // ==========================================
 // RELATÓRIOS
+// ==========================================
 
 function updateReports() {
   const monthData = getMonthData();
   const userData = getUserData();
 
-  // Dados para relatórios
   const familyIncome = (userData.familyMembers || []).reduce(
     (sum, m) => sum + (parseFloat(m.defaultSalary) || 0),
     0,
@@ -1412,7 +1330,6 @@ function updateReports() {
     0,
   );
   const totalIncome = familyIncome + extraIncome;
-
   const totalBills = (monthData.bills || []).reduce(
     (sum, b) => sum + b.amount,
     0,
@@ -1422,12 +1339,9 @@ function updateReports() {
     0,
   );
 
-  // Gráfico 1: Receitas vs Despesas
   const ctx1 = document.getElementById("reportChart1");
   if (ctx1) {
-    if (window.reportChart1Instance) {
-      window.reportChart1Instance.destroy();
-    }
+    if (window.reportChart1Instance) window.reportChart1Instance.destroy();
 
     window.reportChart1Instance = new Chart(ctx1, {
       type: "bar",
@@ -1445,30 +1359,22 @@ function updateReports() {
       options: {
         responsive: true,
         maintainAspectRatio: false,
-        plugins: {
-          legend: { display: false },
-        },
+        plugins: { legend: { display: false } },
         scales: {
           y: {
             beginAtZero: true,
             ticks: {
               color: "#64748b",
-              callback: function (value) {
-                return formatCurrency(value);
-              },
+              callback: (value) => formatCurrency(value),
             },
             grid: { color: "#334155" },
           },
-          x: {
-            ticks: { color: "#64748b" },
-            grid: { display: false },
-          },
+          x: { ticks: { color: "#64748b" }, grid: { display: false } },
         },
       },
     });
   }
 
-  // Gráfico 2: Distribuição por Categoria (Contas)
   const ctx2 = document.getElementById("reportChart2");
   if (ctx2) {
     const categories = {};
@@ -1480,9 +1386,7 @@ function updateReports() {
     const labels = Object.keys(categories);
     const data = Object.values(categories);
 
-    if (window.reportChart2Instance) {
-      window.reportChart2Instance.destroy();
-    }
+    if (window.reportChart2Instance) window.reportChart2Instance.destroy();
 
     if (labels.length === 0) {
       ctx2.style.display = "none";
@@ -1512,17 +1416,13 @@ function updateReports() {
           responsive: true,
           maintainAspectRatio: false,
           plugins: {
-            legend: {
-              position: "right",
-              labels: { color: "#cbd5e1" },
-            },
+            legend: { position: "right", labels: { color: "#cbd5e1" } },
           },
         },
       });
     }
   }
 
-  // Diagnóstico de Saúde Financeira
   const healthContainer = document.getElementById("healthAnalysis");
   if (healthContainer) {
     const despesas = totalBills + totalDebts;
@@ -1532,23 +1432,19 @@ function updateReports() {
 
     if (percentual < 50) {
       status = "Excelente";
-      mensagem =
-        "Suas despesas estão bem controladas! Você está economizando mais da metade da sua renda.";
+      mensagem = "Suas despesas estão bem controladas!";
       cor = "var(--accent-emerald)";
     } else if (percentual < 70) {
       status = "Bom";
-      mensagem =
-        "Suas finanças estão saudáveis, mas há espaço para economizar mais.";
+      mensagem = "Suas finanças estão saudáveis.";
       cor = "var(--accent-gold)";
     } else if (percentual < 90) {
       status = "Atenção";
-      mensagem =
-        "Suas despesas estão consumindo a maior parte da sua renda. Tente reduzir gastos.";
+      mensagem = "Despesas consumindo maior parte da renda.";
       cor = "orange";
     } else {
       status = "Crítico";
-      mensagem =
-        "ALERTA! Suas despesas estão próximas ou ultrapassando sua renda. Reveja urgentemente seu orçamento.";
+      mensagem = "ALERTA! Despesas próximas ou ultrapassando renda.";
       cor = "var(--accent-rose)";
     }
 
@@ -1569,6 +1465,7 @@ function updateReports() {
 
 // ==========================================
 // HISTÓRICO E EVOLUÇÃO FINANCEIRA
+// ==========================================
 
 function loadFinancialEvolution() {
   const userData = getUserData();
@@ -1589,7 +1486,6 @@ function loadFinancialEvolution() {
     return;
   }
 
-  // Preparar dados para o gráfico de evolução
   const labels = [];
   const familyIncomeData = [];
   const extraIncomeData = [];
@@ -1626,7 +1522,6 @@ function loadFinancialEvolution() {
     balanceData.push(balance);
   });
 
-  // Criar HTML do histórico
   let historyHTML = `
     <div class="chart-container" style="height: 400px; margin-bottom: 2rem;">
       <canvas id="evolutionChart"></canvas>
@@ -1635,14 +1530,7 @@ function loadFinancialEvolution() {
     <div class="table-responsive">
       <table class="data-table">
         <thead>
-          <tr>
-            <th>Mês</th>
-            <th>Renda Familiar</th>
-            <th>Renda Extra</th>
-            <th>Contas</th>
-            <th>Dívidas</th>
-            <th>Saldo</th>
-          </tr>
+          <tr><th>Mês</th><th>Renda Familiar</th><th>Renda Extra</th><th>Contas</th><th>Dívidas</th><th>Saldo</th></tr>
         </thead>
         <tbody>
   `;
@@ -1679,20 +1567,12 @@ function loadFinancialEvolution() {
     `;
   });
 
-  historyHTML += `
-        </tbody>
-      </table>
-    </div>
-  `;
-
+  historyHTML += `</tbody></table></div>`;
   container.innerHTML = historyHTML;
 
-  // Criar gráfico de evolução
   const ctx = document.getElementById("evolutionChart");
   if (ctx) {
-    if (window.evolutionChartInstance) {
-      window.evolutionChartInstance.destroy();
-    }
+    if (window.evolutionChartInstance) window.evolutionChartInstance.destroy();
 
     window.evolutionChartInstance = new Chart(ctx, {
       type: "line",
@@ -1745,17 +1625,11 @@ function loadFinancialEvolution() {
         responsive: true,
         maintainAspectRatio: false,
         plugins: {
-          legend: {
-            position: "bottom",
-            labels: { color: "#cbd5e1" },
-          },
+          legend: { position: "bottom", labels: { color: "#cbd5e1" } },
           tooltip: {
             callbacks: {
-              label: function (context) {
-                return (
-                  context.dataset.label + ": " + formatCurrency(context.raw)
-                );
-              },
+              label: (context) =>
+                context.dataset.label + ": " + formatCurrency(context.raw),
             },
           },
         },
@@ -1764,23 +1638,18 @@ function loadFinancialEvolution() {
             beginAtZero: true,
             ticks: {
               color: "#64748b",
-              callback: function (value) {
-                return formatCurrency(value);
-              },
+              callback: (value) => formatCurrency(value),
             },
             grid: { color: "#334155" },
           },
-          x: {
-            ticks: { color: "#64748b" },
-            grid: { display: false },
-          },
+          x: { ticks: { color: "#64748b" }, grid: { display: false } },
         },
       },
     });
   }
 }
 
-function loadHistory() {
+async function loadHistory() {
   const historyMonth = document.getElementById("historyMonth")?.value;
   if (!historyMonth) {
     showNotification("Selecione um mês!", "error");
@@ -1790,7 +1659,6 @@ function loadHistory() {
   const userData = getUserData();
   const monthData = getMonthData(historyMonth);
 
-  // CORREÇÃO: Calcular renda total corretamente (família + extra)
   const familyIncome = (userData.familyMembers || []).reduce(
     (sum, m) => sum + (parseFloat(m.defaultSalary) || 0),
     0,
@@ -1800,7 +1668,6 @@ function loadHistory() {
     0,
   );
   const totalIncome = familyIncome + extraIncome;
-
   const totalBills = (monthData.bills || []).reduce(
     (sum, b) => sum + b.amount,
     0,
@@ -1823,21 +1690,9 @@ function loadHistory() {
             Família: ${formatCurrency(familyIncome)} | Extra: ${formatCurrency(extraIncome)}
           </div>
         </div>
-        <div class="metric-card expense">
-          <div class="metric-header"><div class="metric-icon">📄</div></div>
-          <div class="metric-value">${formatCurrency(totalBills)}</div>
-          <div class="metric-label">Contas</div>
-        </div>
-        <div class="metric-card expense">
-          <div class="metric-header"><div class="metric-icon">💳</div></div>
-          <div class="metric-value">${formatCurrency(totalDebts)}</div>
-          <div class="metric-label">Dívidas</div>
-        </div>
-        <div class="metric-card balance">
-          <div class="metric-header"><div class="metric-icon">💎</div></div>
-          <div class="metric-value">${formatCurrency(balance)}</div>
-          <div class="metric-label">Saldo</div>
-        </div>
+        <div class="metric-card expense"><div class="metric-header"><div class="metric-icon">📄</div></div><div class="metric-value">${formatCurrency(totalBills)}</div><div class="metric-label">Contas</div></div>
+        <div class="metric-card expense"><div class="metric-header"><div class="metric-icon">💳</div></div><div class="metric-value">${formatCurrency(totalDebts)}</div><div class="metric-label">Dívidas</div></div>
+        <div class="metric-card balance"><div class="metric-header"><div class="metric-icon">💎</div></div><div class="metric-value">${formatCurrency(balance)}</div><div class="metric-label">Saldo</div></div>
       </div>
       
       <h3 style="margin: 2rem 0 1rem 0;">Detalhes de ${formatMonth(historyMonth)}</h3>
@@ -1893,19 +1748,20 @@ function loadHistory() {
 
 // ==========================================
 // CONFIGURAÇÕES
+// ==========================================
 
-function clearCurrentMonth() {
+async function clearCurrentMonth() {
   if (!confirm("Apagar todos os dados do mês atual?")) return;
 
   const userData = getUserData();
   delete userData.finances[currentMonth];
-  saveUserData(userData);
+  await saveUserData(userData);
 
   loadAllData();
   showNotification("Dados do mês apagados!", "success");
 }
 
-function clearSpecificPeriod() {
+async function clearSpecificPeriod() {
   const month = document.getElementById("deletePeriodMonth")?.value;
   if (!month) {
     showNotification("Selecione um período!", "error");
@@ -1916,20 +1772,22 @@ function clearSpecificPeriod() {
 
   const userData = getUserData();
   delete userData.finances[month];
-  saveUserData(userData);
+  await saveUserData(userData);
 
   showNotification("Período apagado!", "success");
 }
 
-function clearAllData() {
+async function clearAllData() {
   if (!confirm("⚠️ ATENÇÃO! Apagar TODOS os dados?")) return;
   if (!confirm("Confirme: TUDO será perdido permanentemente!")) return;
 
-  if (currentUser) {
-    localStorage.removeItem(`${STORAGE_KEYS.FINANCES}_${currentUser.id}`);
-    initializeUserData(currentUser.id);
-  }
+  currentUserData = {
+    familyMembers: [],
+    finances: {},
+    debts: [],
+  };
 
+  await saveUserData(currentUserData);
   loadAllData();
   showNotification("Todos os dados apagados!", "success");
 }
@@ -1949,15 +1807,15 @@ function exportData() {
   showNotification("Dados exportados!", "success");
 }
 
-function importData(input) {
+async function importData(input) {
   const file = input.files[0];
   if (!file) return;
 
   const reader = new FileReader();
-  reader.onload = function (e) {
+  reader.onload = async function (e) {
     try {
       const data = JSON.parse(e.target.result);
-      saveUserData(data);
+      await saveUserData(data);
       loadAllData();
       showNotification("Dados importados!", "success");
     } catch (err) {
@@ -1973,6 +1831,7 @@ function generateFullReport() {
 
 // ==========================================
 // UTILITÁRIOS
+// ==========================================
 
 function formatCurrency(value) {
   return new Intl.NumberFormat("pt-BR", {
@@ -2052,6 +1911,7 @@ function showNotification(message, type = "info") {
 
 // ==========================================
 // FUNÇÕES GLOBAIS
+// ==========================================
 
 window.showSection = showSection;
 window.changeMonth = changeMonth;
