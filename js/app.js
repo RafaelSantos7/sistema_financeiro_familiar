@@ -1032,6 +1032,7 @@ async function addDebt(e) {
     installments,
     paid: 0,
     dueDay,
+    startMonth: currentMonth,
     createdAt: new Date().toISOString(),
   });
 
@@ -2053,6 +2054,29 @@ async function deleteTemplate(id) {
   showNotification("Template excluído!", "success");
 }
 
+function calculateDebtsForMonth(debts, month) {
+  let total = 0;
+
+  debts.forEach((debt) => {
+    const installment = parseFloat(debt.installment || debt.amount) || 0;
+    const installments = parseInt(debt.installments) || 1;
+
+    // se não tiver startMonth usa mês atual
+    const startMonth = debt.startMonth || currentMonth;
+
+    const [startYear, startM] = startMonth.split("-").map(Number);
+    const [year, m] = month.split("-").map(Number);
+
+    const diff = (year - startYear) * 12 + (m - startM);
+
+    if (diff >= 0 && diff < installments) {
+      total += installment;
+    }
+  });
+
+  return total;
+}
+
 // ==========================================
 // DASHBOARD
 // ==========================================
@@ -2114,21 +2138,51 @@ function updateDashboard() {
   const history = userData.debtPaymentHistory || [];
   const debtsPaidThisMonth = history.filter((h) => h.month === currentMonth);
 
-  // === PARCELAS DAS DÍVIDAS (CORRETO PARA TODOS OS MESES) ===
-  const totalDebtInstallments = (userData.debts || []).reduce((sum, d) => {
-    const totalInstallments = parseInt(d.installments) || 1;
-    const paidInstallments = parseInt(d.paid) || 0;
+  // === PARCELAS DAS DÍVIDAS (CORREÇÃO: SEMPRE MOSTRAR PARCELAS PENDENTES) ===
+  // Calcula o valor total de parcelas que ainda não foram pagas (em qualquer mês)
+  // const totalDebtInstallments = (userData.debts || []).reduce((sum, d) => {
+  //   const totalInstallments = parseInt(d.installments) || 1;
+  //   const paidInstallments = parseInt(d.paid) || 0;
+  //   const remainingInstallments = Math.max(
+  //     0,
+  //     totalInstallments - paidInstallments,
+  //   );
 
-    const remaining = totalInstallments - paidInstallments;
+  //   // Soma apenas as parcelas que ainda faltam pagar
+  //   if (remainingInstallments > 0) {
+  //     return sum + (parseFloat(d.installment) || 0);
+  //   }
+  //   return sum;
+  // }, 0);
 
-    if (remaining > 0) {
-      return sum + (parseFloat(d.installment) || 0);
-    }
+  const debts = userData.debts || [];
 
-    return sum;
-  }, 0);
+  const totalDebtInstallments = calculateDebtsForMonth(debts, currentMonth);
 
-  const prevTotalDebtInstallments = totalDebtInstallments;
+  // Para comparação com mês anterior, usamos a mesma lógica mas com dados do mês anterior
+  // const prevTotalDebtInstallments = (prevUserData.debts || []).reduce(
+  //   (sum, d) => {
+  //     const totalInstallments = parseInt(d.installments) || 1;
+  //     const paidInstallments = parseInt(d.paid) || 0;
+  //     const remainingInstallments = Math.max(
+  //       0,
+  //       totalInstallments - paidInstallments,
+  //     );
+
+  //     if (remainingInstallments > 0) {
+  //       return sum + (parseFloat(d.installment) || 0);
+  //     }
+  //     return sum;
+  //   },
+  //   0,
+  // );
+
+  const prevDebts = prevUserData.debts || [];
+
+  const prevTotalDebtInstallments = calculateDebtsForMonth(
+    prevDebts,
+    prevMonthStr,
+  );
 
   // === DESPESAS TOTAIS ===
   const totalExpenses = totalBills + totalDebtInstallments;
